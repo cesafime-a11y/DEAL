@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEAL</title>
+  <style>
+    html,body{margin:0;padding:0;overflow:hidden;background:#0a0a0a;height:100%}
+    canvas{display:block}
+    #crosshair{
+      position:fixed;top:50%;left:50%;width:6px;height:6px;
+      margin:-3px 0 0 -3px;border-radius:50%;
+      background:rgba(255,255,255,.85);
+      box-shadow:0 0 0 1.5px rgba(0,0,0,.5);
+      pointer-events:none;z-index:10;
+    }
+    #avisoMesa{
+      position:fixed;bottom:60px;left:50%;transform:translateX(-50%);
+      font:13px/1.4 'Courier New',monospace;color:#ffe9b0;
+      background:rgba(0,0,0,.55);padding:8px 16px;border-radius:8px;
+      pointer-events:none;text-align:center;z-index:10;display:none;
+    }
+    #banco{
+      position:fixed;top:0;right:0;bottom:0;display:none;align-items:center;
+      z-index:20;font-family:'Courier New',monospace;padding:24px;
+    }
+    #banco .panel{
+      background:rgba(24,22,19,.94);border:1px solid #3a352c;border-radius:10px;
+      padding:22px 26px;width:520px;max-width:92vw;color:#e9e4d8;
+      max-height:calc(100vh - 48px);overflow-y:auto;
+      box-shadow:-8px 0 28px rgba(0,0,0,.45);
+    }
+    #banco h2{margin:0 0 4px;font-size:17px;letter-spacing:.03em}
+    #banco .subtitulo{margin:0 0 16px;font-size:10px;color:#9a9384;line-height:1.5}
+    #bancoContenido{
+      display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;
+    }
+    .fila-pieza{
+      display:flex;align-items:center;justify-content:space-between;
+      background:#242019;border-radius:8px;padding:11px 8px;
+    }
+    .fila-pieza .flecha{
+      background:#3a352c;color:#e9e4d8;border:none;border-radius:5px;
+      width:26px;height:26px;font-size:14px;cursor:pointer;flex-shrink:0;
+    }
+    .fila-pieza .flecha:hover{background:#4a4536}
+    .info-pieza{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;padding:0 4px}
+    .etiqueta-pieza{font-size:8.5px;color:#8a8374;letter-spacing:.07em;text-transform:uppercase}
+    .nombre-pieza{font-size:12px;margin-top:2px;text-align:center;line-height:1.25}
+    #banco .botones{display:flex;gap:8px;margin-top:18px}
+    #banco button.principal{
+      flex:1;background:#c98a3a;color:#181410;border:none;border-radius:6px;
+      padding:11px;font:600 12px 'Courier New',monospace;cursor:pointer;letter-spacing:.03em;
+    }
+    #banco button.principal:hover{background:#dd9a44}
+    #banco button.secundario{
+      background:transparent;color:#9a9384;border:1px solid #3a352c;border-radius:6px;
+      padding:11px 16px;font:12px 'Courier New',monospace;cursor:pointer;
+    }
+    .stats-arma{
+      display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;
+      background:#181613;border-radius:8px;padding:11px 14px;margin-top:14px;
+      font-size:11px;color:#b8b2a2;
+    }
+    .stats-arma .stat{display:flex;flex-direction:column;gap:2px}
+    .stats-arma .stat b{color:#e9e4d8;font-weight:600;font-size:13px}
+    #menuPrincipal{
+      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      flex-direction:column;background:#0d0c0a;z-index:30;font-family:'Courier New',monospace;
+    }
+    #menuPrincipal h1{
+      font-size:clamp(36px,8vw,64px);letter-spacing:.05em;color:#e9e4d8;margin:0;
+    }
+    #menuPrincipal h1 span{color:#c98a3a}
+    #menuPrincipal p{color:#8a8374;font-size:13px;margin:8px 0 30px}
+    #menuPrincipal button{
+      background:#c98a3a;color:#181410;border:none;border-radius:6px;
+      padding:14px 42px;font:700 14px 'Courier New',monospace;cursor:pointer;
+      letter-spacing:.05em;
+    }
+    #menuPrincipal button:hover{background:#dd9a44}
+    #menuPrincipal .controles{
+      margin-top:26px;font-size:10px;color:#6a655c;line-height:1.8;text-align:center;
+    }
+    #hud{position:fixed;inset:0;pointer-events:none;z-index:8;font-family:'Courier New',monospace}
+    #hudMunicion{
+      position:absolute;bottom:26px;right:30px;font-size:26px;color:#e9e4d8;
+      text-shadow:0 2px 6px rgba(0,0,0,.65);text-align:right;
+    }
+    #hudMunicion .cap{font-size:14px;color:#9a9384}
+    #hudArmaNombre{
+      position:absolute;bottom:56px;right:30px;max-width:240px;
+      font-size:10px;color:#b8b2a2;text-shadow:0 1px 3px rgba(0,0,0,.65);text-align:right;
+    }
+    #hudInventario{
+      position:absolute;bottom:26px;left:50%;transform:translateX(-50%);display:flex;gap:6px;
+    }
+    .espacio-inv{
+      width:36px;height:36px;border-radius:6px;
+      background:rgba(20,18,16,.72);border:1px solid #3a352c;
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;color:#6a655c;transition:border-color .15s,background .15s;
+    }
+    .espacio-inv.ocupado{color:#e9e4d8;border-color:#4a4536}
+    .espacio-inv.activo{border-color:#c98a3a;background:rgba(201,138,58,.2)}
+    #hudPeso{
+      position:absolute;bottom:66px;left:50%;transform:translateX(-50%);
+      font-size:10px;color:#9a9384;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.65);
+    }
+    #hudPeso.saturado{color:#e0663f}
+    #menuPausa{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      background:rgba(8,7,6,.82);z-index:25;font-family:'Courier New',monospace;
+    }
+    #menuPausa .panel{
+      background:#1c1a17;border:1px solid #3a352c;border-radius:10px;
+      padding:32px 40px;text-align:center;color:#e9e4d8;
+    }
+    #menuPausa h2{margin:0 0 20px;font-size:20px;letter-spacing:.06em;color:#c98a3a}
+    #menuPausa button{
+      background:#c98a3a;color:#181410;border:none;border-radius:6px;
+      padding:12px 36px;font:700 13px 'Courier New',monospace;cursor:pointer;letter-spacing:.04em;
+    }
+    #menuPausa button:hover{background:#dd9a44}
+    #menuPausa .controles{
+      margin-top:22px;font-size:10px;color:#8a8374;line-height:1.9;text-align:left;
+    }
+    #banco button.terciario{
+      width:100%;background:#2a2620;color:#c9a876;border:1px solid #4a4030;border-radius:6px;
+      padding:9px;font:600 11px 'Courier New',monospace;cursor:pointer;letter-spacing:.03em;
+      margin-top:14px;
+    }
+    #banco button.terciario:hover{background:#332e26}
+    #vista3D{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      background:rgba(6,5,4,.88);z-index:35;font-family:'Courier New',monospace;
+    }
+    #vista3D .panel{
+      background:#171512;border:1px solid #3a352c;border-radius:10px;
+      padding:18px;width:min(640px,90vw);color:#e9e4d8;
+    }
+    #vista3D .encabezado{
+      display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+    }
+    #vista3D h2{font-size:15px;margin:0;letter-spacing:.03em}
+    #vista3D p{font-size:10px;color:#8a8374;margin:0}
+    #vista3D button{
+      background:#c98a3a;color:#181410;border:none;border-radius:6px;
+      padding:8px 20px;font:600 12px 'Courier New',monospace;cursor:pointer;
+    }
+    #vista3D button:hover{background:#dd9a44}
+    #vista3DCanvas{
+      width:100%;height:min(52vh,440px);border-radius:8px;display:block;
+      cursor:grab;
+    }
+    #vista3DCanvas:active{cursor:grabbing}
+  </style>
+</head>
+<body>
+  <div id="menuPrincipal">
+    <h1>DE<span>AL</span></h1>
+    <p>traficante y fabricante de armas — base de pruebas</p>
+    <button id="btnJugar">JUGAR</button>
+    <div class="controles">
+      WASD moverse &middot; ratón mirar &middot; clic izq. disparar &middot; clic der. apuntar<br>
+      R recargar &middot; E interactuar &middot; 1-8 cambiar de arma &middot; ESC pausa
+    </div>
+  </div>
+  <div id="menuPausa">
+    <div class="panel">
+      <h2>PAUSA</h2>
+      <button id="btnReanudar">Reanudar</button>
+      <div class="controles">
+        WASD moverse &middot; ratón mirar &middot; clic izq. disparar &middot; clic der. apuntar<br>
+        R recargar &middot; E interactuar &middot; 1-8 cambiar de arma
+      </div>
+    </div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="hud">
+    <div id="hudArmaNombre"></div>
+    <div id="hudMunicion"></div>
+    <div id="hudPeso"></div>
+    <div id="hudInventario"></div>
+  </div>
+  <div id="avisoMesa">presiona E para abrir el banco de trabajo</div>
+  <div id="banco">
+    <div class="panel">
+      <h2>Banco de trabajo</h2>
+      <p class="subtitulo">arma tu combinación — se ve tendida sobre la mesa, se aplica al confirmar</p>
+      <div id="bancoContenido"></div>
+      <div id="bancoStats" class="stats-arma"></div>
+      <button id="btnVista3D" class="terciario">Ver en 3D — girar con el mouse</button>
+      <div class="botones">
+        <button id="btnCerrarBanco" class="secundario">Cerrar</button>
+        <button id="btnAplicarArma" class="principal">Aplicar y cerrar</button>
+      </div>
+    </div>
+  </div>
+  <div id="vista3D">
+    <div class="panel">
+      <div class="encabezado">
+        <div>
+          <h2>Inspección 3D</h2>
+          <p>arrastra con el mouse para girarla</p>
+        </div>
+        <button id="btnCerrarVista3D">Cerrar</button>
+      </div>
+      <canvas id="vista3DCanvas"></canvas>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
