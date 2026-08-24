@@ -10,17 +10,13 @@
 import * as THREE from 'three';
 import { construirModeloArma, liberarModeloArma } from '../armas/modeloArma.js';
 
-export function crearExhibidorArma(scene, posicionMesa) {
+export function crearExhibidorArma(scene, superficieMesa) {
   let modeloActual = null;
 
-  // la mesa (taller.js) mide 0.85 de alto y `posicionMesa` es su
-  // CENTRO, no su superficie — la superficie de arriba está a la
-  // mitad de esa altura por encima del centro. Sin este ajuste,
-  // tanto el arma como el tapete quedaban enterrados a la mitad
-  // de la mesa sólida, tapados por su propia geometría (confirmado
-  // con el diagnóstico: posición Y=0.47 real vs 0.85 de superficie).
-  const ALTO_SUPERFICIE_MESA = 0.425;   // la mitad de 0.85
-  const superficieMesa = posicionMesa.clone().setY(posicionMesa.y + ALTO_SUPERFICIE_MESA);
+  // `superficieMesa` viene ya calculada desde taller.js — antes se
+  // calculaba aquí sumando un valor fijo al centro de la mesa, y
+  // eso se rompía cada vez que la mesa cambiaba de forma (pasó al
+  // convertirla de bloque macizo a tablero con patas).
 
   // el tapete de exhibición y el foco son fijos — se prenden y
   // apagan, no se reconstruyen cada vez que cambias de pieza
@@ -36,9 +32,19 @@ export function crearExhibidorArma(scene, posicionMesa) {
   const foco = new THREE.SpotLight(0xffe4bd, 0, 6, Math.PI / 7, 0.4, 1.5);
   foco.position.set(superficieMesa.x, superficieMesa.y + 1.1, superficieMesa.z);
   foco.castShadow = true;
+  foco.shadow.mapSize.set(1024, 1024);
+  foco.shadow.bias = -0.0015;
   scene.add(foco);
   foco.target.position.copy(superficieMesa);
   scene.add(foco.target);
+
+  // luz de relleno suave, desde el lado contrario — sin ella, el
+  // foco solo (muy direccional) dejaba el lado no iluminado del
+  // arma casi negro, perdiendo todo el detalle nuevo (remaches,
+  // líneas de panel, riel) de ese lado
+  const relleno = new THREE.PointLight(0x8fa8d8, 0, 2.2, 2);
+  relleno.position.set(superficieMesa.x - 0.35, superficieMesa.y + 0.35, superficieMesa.z + 0.25);
+  scene.add(relleno);
 
   /* Reemplaza el arma tendida sobre la mesa — misma función que
      arma el modelo de verdad que traes en mano, así lo que ves
@@ -65,6 +71,7 @@ export function crearExhibidorArma(scene, posicionMesa) {
 
     tapete.visible = true;
     foco.intensity = 5.5;
+    relleno.intensity = 1.4;
   }
 
   /* Quita el arma de la mesa — se llama al cerrar el banco, para
@@ -78,6 +85,7 @@ export function crearExhibidorArma(scene, posicionMesa) {
     }
     tapete.visible = false;
     foco.intensity = 0;
+    relleno.intensity = 0;
   }
 
   return { mostrarArma, ocultar };

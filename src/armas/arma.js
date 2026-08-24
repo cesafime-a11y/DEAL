@@ -73,7 +73,7 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
     // cámara al apuntar del todo — antes era un valor fijo para
     // todas las armas, así que con la telescópica terminabas viendo
     // el tubo sólido de lado en vez de mirar A TRAVÉS de ella.
-    posApuntando.copy(modeloActual.puntoOcular).negate();
+    posApuntando.copy(modeloActual.posApuntando);
   }
   montarModelo(seleccionInicial);
 
@@ -103,9 +103,38 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
   let retroceso = 0;         // 0 a 1, decae solo — mueve el arma al disparar
   const RECUPERACION_RETROCESO = 9;   // qué tan rápido vuelve el arma a su lugar
 
+  /* Patrón de escalada: cada disparo seguido sube un poco más que
+     el anterior, hasta un tope, y se resetea si dejas de disparar
+     un momento. Antes cada disparo pegaba exactamente igual, así
+     que aguantar el gatillo no se sentía distinto a tirar suelto. */
+  let escalada = 0;
+  const SUBIDA_ESCALADA = 0.22;      // cuánto sube por disparo seguido
+  const RESET_ESCALADA = 3.2;        // qué tan rápido se calma al soltar
+
+  /* Sacudida de la cámara — el arma sola no bastaba, la vista tiene
+     que moverse también para que el disparo se sienta con peso. Se
+     acumula al disparar y se recupera sola, y jamás toca la
+     orientación real del jugador: se aplica como un desplazamiento
+     encima, y se resta antes de volver a calcularla, para no pelear
+     con PointerLockControls.                                       */
+  let sacudidaX = 0, sacudidaY = 0;
+  let sacudidaAplicadaX = 0, sacudidaAplicadaY = 0;
+  const RECUPERACION_SACUDIDA = 11;
+
   // 0 = posición normal, 1 = totalmente "mirando el cargador" — el
   // módulo de animación anima esto de 0→1→0 durante la recarga
   let offsetRecarga = 0;
+
+  /* Inspección: mantener la tecla acerca el arma y la gira para
+     verle los detalles. Es puramente visual — no bloquea disparar
+     (soltar el gatillo la cancela sola), solo es para apreciar lo
+     que armaste.                                                  */
+  let inspeccionando = 0;   // 0 a 1, se anima suave como el apuntado
+  const VELOCIDAD_INSPECCION = 4.5;
+  function inspeccionar(activa) {
+    inspeccionObjetivo = activa ? 1 : 0;
+  }
+  let inspeccionObjetivo = 0;
 
   /* Intenta disparar. Devuelve los datos para que quien llame haga
      el raycasting de verdad — este módulo no sabe nada de la
@@ -121,8 +150,16 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
 
     balas--;
     cooldown = 1 / estadisticas.cadencia;
-    retroceso = estadisticas.retroceso;
+    escalada = Math.min(1, escalada + SUBIDA_ESCALADA);
+    retroceso = estadisticas.retroceso * (0.5 + escalada * 0.9);
     fogonazo.intensity = 3.2;
+
+    // la cámara se sacude hacia arriba, con algo de deriva
+    // horizontal aleatoria — apuntando se siente bastante menos,
+    // igual que el retroceso visual del arma
+    const factorSacudida = (1 - apuntandoActual * 0.5) * estadisticas.retroceso;
+    sacudidaX += (0.011 + escalada * 0.012) * factorSacudida;
+    sacudidaY += (Math.random() - 0.5) * 0.014 * factorSacudida;
 
     const origen = new THREE.Vector3();
     const direccionRecta = new THREE.Vector3();
@@ -233,6 +270,23 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
       if (tiempoRecargaRestante <= 0) { balas = estadisticas.capacidad; recargando = false; }
     }
     retroceso = Math.max(0, retroceso - dt * RECUPERACION_RETROCESO);
+    escalada = Math.max(0, escalada - dt * RESET_ESCALADA);
+
+    /* Sacudida de cámara: primero se DESHACE la del cuadro anterior,
+       y luego se aplica la nueva. Sin ese paso, la sacudida se
+       acumularía sobre sí misma y la vista se iría desviando poco a
+       poco de donde de verdad apuntas.                              */
+    camera.rotation.x -= sacudidaAplicadaX;
+    camera.rotation.y -= sacudidaAplicadaY;
+    const decaimiento = Math.max(0, 1 - dt * RECUPERACION_SACUDIDA);
+    sacudidaX *= decaimiento;
+    sacudidaY *= decaimiento;
+    if (Math.abs(sacudidaX) < 0.00005) sacudidaX = 0;
+    if (Math.abs(sacudidaY) < 0.00005) sacudidaY = 0;
+    camera.rotation.x += sacudidaX;
+    camera.rotation.y += sacudidaY;
+    sacudidaAplicadaX = sacudidaX;
+    sacudidaAplicadaY = sacudidaY;
     fogonazo.intensity = Math.max(0, fogonazo.intensity - dt * 26);
 
     // transición suave hacia/desde apuntando, nunca de golpe — la
@@ -260,14 +314,20 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
     // atenúa hasta un 45% al apuntar del todo, nunca desaparece.
     const factorRetrocesoVisual = 1 - apuntandoActual * 0.45;
     const retrocesoVisual = retroceso * factorRetrocesoVisual;
+    // animar la inspección igual que el apuntado, nunca de golpe
+    const pasoInspeccion = VELOCIDAD_INSPECCION * dt;
+    inspeccionando = inspeccionObjetivo > inspeccionando
+      ? Math.min(inspeccionObjetivo, inspeccionando + pasoInspeccion)
+      : Math.max(inspeccionObjetivo, inspeccionando - pasoInspeccion);
+
     grupo.position.set(
-      posActual.x + balanceoX,
-      posActual.y + balanceoY + respiro + retrocesoVisual * 0.042 - offsetRecarga * 0.14,
-      posActual.z + retrocesoVisual * 0.085 + offsetRecarga * 0.05
+      posActual.x + balanceoX - inspeccionando * 0.1,
+      posActual.y + balanceoY + respiro + retrocesoVisual * 0.042 - offsetRecarga * 0.14 + inspeccionando * 0.06,
+      posActual.z + retrocesoVisual * 0.085 + offsetRecarga * 0.05 + inspeccionando * 0.16
     );
-    grupo.rotation.y = THREE.MathUtils.lerp(rotCadera, 0, apuntandoActual);
-    grupo.rotation.x = -retrocesoVisual * 0.15 + offsetRecarga * 0.5;   // se inclina como mirando el cargador
-    grupo.rotation.z = offsetRecarga * 0.22;
+    grupo.rotation.y = THREE.MathUtils.lerp(rotCadera, 0, apuntandoActual) + inspeccionando * 0.85;
+    grupo.rotation.x = -retrocesoVisual * 0.15 + offsetRecarga * 0.5 + inspeccionando * 0.22;
+    grupo.rotation.z = offsetRecarga * 0.22 - inspeccionando * 0.35;
 
     // el campo de visión se acerca junto con el arma — es lo que
     // vende la sensación de "estar mirando a través de la mira"
@@ -278,5 +338,15 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
     }
   }
 
-  return { grupo, actualizar, disparar, recargar, estado, obtenerPuntaCanon, actualizarArma };
+  /* Pone en cero el estado de la sacudida — hace falta llamarla
+     cuando el arma deja de animarse por un rato (banco abierto) y
+     la cámara se reposiciona por completo desde afuera: sin esto,
+     al reanudar se intentaría deshacer una sacudida vieja que ya
+     no aplica a la nueva orientación de la cámara.               */
+  function reiniciarSacudida() {
+    sacudidaX = 0; sacudidaY = 0;
+    sacudidaAplicadaX = 0; sacudidaAplicadaY = 0;
+  }
+
+  return { grupo, actualizar, disparar, recargar, estado, obtenerPuntaCanon, actualizarArma, inspeccionar, reiniciarSacudida };
 }

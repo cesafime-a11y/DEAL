@@ -7,63 +7,137 @@
   <style>
     html,body{margin:0;padding:0;overflow:hidden;background:#0a0a0a;height:100%}
     canvas{display:block}
-    #crosshair{
-      position:fixed;top:50%;left:50%;width:6px;height:6px;
-      margin:-3px 0 0 -3px;border-radius:50%;
-      background:rgba(255,255,255,.85);
-      box-shadow:0 0 0 1.5px rgba(0,0,0,.5);
-      pointer-events:none;z-index:10;
-    }
     #avisoMesa{
       position:fixed;bottom:60px;left:50%;transform:translateX(-50%);
       font:13px/1.4 'Courier New',monospace;color:#ffe9b0;
       background:rgba(0,0,0,.55);padding:8px 16px;border-radius:8px;
       pointer-events:none;text-align:center;z-index:10;display:none;
     }
+    /* ── Banco de trabajo: armería a pantalla completa ─────────
+       Rediseñado al estilo de una armería de verdad: barra
+       superior con el arma y su nivel, columna de accesorios a la
+       izquierda, el arma en vivo al centro (sigue siendo el
+       render real de la mesa, no una imagen), y las estadísticas
+       con barras comparativas a la derecha.                      */
     #banco{
-      position:fixed;top:0;right:0;bottom:0;display:none;align-items:center;
-      z-index:20;font-family:'Courier New',monospace;padding:24px;
+      position:fixed;inset:0;display:none;z-index:20;
+      font-family:'Courier New',monospace;
+      background:linear-gradient(180deg,rgba(10,9,8,.92) 0%,rgba(10,9,8,.55) 28%,rgba(10,9,8,.55) 62%,rgba(10,9,8,.94) 100%);
     }
-    #banco .panel{
-      background:rgba(24,22,19,.94);border:1px solid #3a352c;border-radius:10px;
-      padding:22px 26px;width:520px;max-width:92vw;color:#e9e4d8;
-      max-height:calc(100vh - 48px);overflow-y:auto;
-      box-shadow:-8px 0 28px rgba(0,0,0,.45);
+    #banco .armeria{
+      position:absolute;inset:0;display:grid;
+      grid-template-rows:auto 1fr auto;
+      color:#e9e4d8;pointer-events:none;
     }
-    #banco h2{margin:0 0 4px;font-size:17px;letter-spacing:.03em}
-    #banco .subtitulo{margin:0 0 16px;font-size:10px;color:#9a9384;line-height:1.5}
-    #bancoContenido{
-      display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;
-    }
-    .fila-pieza{
+    #banco .armeria > *{pointer-events:auto}
+
+    /* barra superior */
+    #banco .barra-sup{
       display:flex;align-items:center;justify-content:space-between;
-      background:#242019;border-radius:8px;padding:11px 8px;
+      padding:16px 28px;border-bottom:1px solid rgba(201,138,58,.22);
+      background:linear-gradient(180deg,rgba(14,12,10,.95),rgba(14,12,10,.6));
     }
-    .fila-pieza .flecha{
-      background:#3a352c;color:#e9e4d8;border:none;border-radius:5px;
-      width:26px;height:26px;font-size:14px;cursor:pointer;flex-shrink:0;
+    #banco .titulo-arma{display:flex;align-items:baseline;gap:14px}
+    #banco .titulo-arma h2{
+      margin:0;font-size:19px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
     }
-    .fila-pieza .flecha:hover{background:#4a4536}
-    .info-pieza{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;padding:0 4px}
-    .etiqueta-pieza{font-size:8.5px;color:#8a8374;letter-spacing:.07em;text-transform:uppercase}
-    .nombre-pieza{font-size:12px;margin-top:2px;text-align:center;line-height:1.25}
-    #banco .botones{display:flex;gap:8px;margin-top:18px}
+    #banco .titulo-arma .tipo{
+      font-size:10px;color:#c98a3a;letter-spacing:.16em;text-transform:uppercase;
+    }
+    #banco .medidor-peso{display:flex;align-items:center;gap:10px;font-size:10px;color:#8a8374}
+    #banco .medidor-peso .barra{
+      width:120px;height:5px;background:#2a2620;border-radius:3px;overflow:hidden;
+    }
+    #banco .medidor-peso .relleno{
+      height:100%;background:#c98a3a;transition:width .22s,background .22s;
+    }
+    #banco .medidor-peso .relleno.pesado{background:#e0663f}
+
+    /* cuerpo de tres columnas */
+    #banco .cuerpo-armeria{
+      display:grid;grid-template-columns:300px 1fr 250px;
+      gap:20px;padding:20px 28px;overflow:hidden;min-height:0;
+    }
+    #banco .columna{display:flex;flex-direction:column;gap:9px;overflow-y:auto;min-height:0;padding-right:4px}
+    #banco .columna::-webkit-scrollbar{width:5px}
+    #banco .columna::-webkit-scrollbar-thumb{background:#3a352c;border-radius:3px}
+    #banco .centro-vacio{pointer-events:none}
+
+    #banco .encabezado-col{
+      font-size:9px;color:#c98a3a;letter-spacing:.18em;text-transform:uppercase;
+      font-weight:700;padding:0 0 7px;border-bottom:1px solid rgba(201,138,58,.2);
+      margin-bottom:3px;
+    }
+    #banco .encabezado-col.secundario{color:#7a7466;border-bottom-color:#2c2822;margin-top:14px}
+
+    /* ranura de accesorio */
+    .ranura{
+      display:flex;align-items:center;gap:10px;
+      background:rgba(28,25,21,.82);border:1px solid #2f2a23;border-left:2px solid #3a352c;
+      border-radius:6px;padding:9px 10px;cursor:default;
+      transition:border-color .16s,background .16s;
+    }
+    .ranura:hover{background:rgba(38,34,28,.9);border-left-color:#c98a3a}
+    .ranura.ocupada{border-left-color:#c98a3a}
+    .ranura .flecha{
+      background:transparent;color:#7a7466;border:none;border-radius:4px;
+      width:20px;height:24px;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1;
+      transition:color .14s;
+    }
+    .ranura .flecha:hover{color:#e9e4d8}
+    .ranura .datos{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+    .ranura .cat{font-size:8px;color:#7a7466;letter-spacing:.14em;text-transform:uppercase}
+    .ranura .val{font-size:11.5px;line-height:1.25;color:#e9e4d8}
+    .ranura .val.vacio{color:#6a655c;font-style:italic}
+    .ranura .contador{font-size:8px;color:#5f5a51;letter-spacing:.06em}
+
+    /* estadísticas con barras */
+    .stat-barra{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+    .stat-barra .fila{display:flex;justify-content:space-between;align-items:baseline}
+    .stat-barra .nombre{font-size:9px;color:#8a8374;letter-spacing:.1em;text-transform:uppercase}
+    .stat-barra .valor{font-size:12px;color:#e9e4d8;font-weight:700}
+    .stat-barra .pista{height:4px;background:#241f19;border-radius:2px;overflow:hidden;position:relative}
+    .stat-barra .lleno{
+      height:100%;background:linear-gradient(90deg,#8a6428,#c98a3a);border-radius:2px;
+      transition:width .25s ease;
+    }
+    /* fantasma: dónde estaba la estadística ANTES del último cambio,
+       para ver de un vistazo si la pieza que acabas de poner subió
+       o bajó ese número */
+    .stat-barra .fantasma{
+      position:absolute;top:0;height:100%;border-right:2px solid rgba(233,228,216,.55);
+      transition:width .25s ease;
+    }
+    .stat-barra .delta{font-size:9px;margin-left:6px;font-weight:700}
+    .stat-barra .delta.sube{color:#6fbf73}
+    .stat-barra .delta.baja{color:#e0663f}
+
+    /* barra inferior */
+    #banco .barra-inf{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:14px 28px;border-top:1px solid rgba(201,138,58,.22);
+      background:linear-gradient(0deg,rgba(14,12,10,.95),rgba(14,12,10,.6));
+    }
+    #banco .pista-teclas{font-size:9.5px;color:#6a655c;letter-spacing:.05em}
+    #banco .acciones{display:flex;gap:9px}
     #banco button.principal{
-      flex:1;background:#c98a3a;color:#181410;border:none;border-radius:6px;
-      padding:11px;font:600 12px 'Courier New',monospace;cursor:pointer;letter-spacing:.03em;
+      background:#c98a3a;color:#181410;border:none;border-radius:5px;
+      padding:11px 30px;font:700 11.5px 'Courier New',monospace;cursor:pointer;letter-spacing:.1em;
+      text-transform:uppercase;
     }
     #banco button.principal:hover{background:#dd9a44}
     #banco button.secundario{
-      background:transparent;color:#9a9384;border:1px solid #3a352c;border-radius:6px;
-      padding:11px 16px;font:12px 'Courier New',monospace;cursor:pointer;
+      background:transparent;color:#9a9384;border:1px solid #3a352c;border-radius:5px;
+      padding:11px 22px;font:11.5px 'Courier New',monospace;cursor:pointer;letter-spacing:.1em;
+      text-transform:uppercase;
     }
-    .stats-arma{
-      display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 14px;
-      background:#181613;border-radius:8px;padding:11px 14px;margin-top:14px;
-      font-size:11px;color:#b8b2a2;
+    #banco button.secundario:hover{border-color:#4a4536;color:#e9e4d8}
+    #banco button.terciario{
+      background:transparent;color:#c9a876;border:1px solid #4a4030;border-radius:5px;
+      padding:11px 20px;font:600 11px 'Courier New',monospace;cursor:pointer;letter-spacing:.08em;
+      text-transform:uppercase;
     }
-    .stats-arma .stat{display:flex;flex-direction:column;gap:2px}
-    .stats-arma .stat b{color:#e9e4d8;font-weight:600;font-size:13px}
+    #banco button.terciario:hover{background:rgba(201,138,58,.12)}
     #menuPrincipal{
       position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
       flex-direction:column;background:#0d0c0a;z-index:30;font-family:'Courier New',monospace;
@@ -127,8 +201,8 @@
     }
     #banco button.terciario{
       width:100%;background:#2a2620;color:#c9a876;border:1px solid #4a4030;border-radius:6px;
-      padding:9px;font:600 11px 'Courier New',monospace;cursor:pointer;letter-spacing:.03em;
-      margin-top:14px;
+      padding:10px;font:600 11px 'Courier New',monospace;cursor:pointer;letter-spacing:.03em;
+      margin-top:18px;
     }
     #banco button.terciario:hover{background:#332e26}
     #vista3D{
@@ -163,7 +237,7 @@
     <button id="btnJugar">JUGAR</button>
     <div class="controles">
       WASD moverse &middot; ratón mirar &middot; clic izq. disparar &middot; clic der. apuntar<br>
-      R recargar &middot; E interactuar &middot; 1-8 cambiar de arma &middot; ESC pausa
+      R recargar &middot; E interactuar &middot; F inspeccionar &middot; 1-8 cambiar de arma &middot; ESC pausa
     </div>
   </div>
   <div id="menuPausa">
@@ -172,11 +246,10 @@
       <button id="btnReanudar">Reanudar</button>
       <div class="controles">
         WASD moverse &middot; ratón mirar &middot; clic izq. disparar &middot; clic der. apuntar<br>
-        R recargar &middot; E interactuar &middot; 1-8 cambiar de arma
+        R recargar &middot; E interactuar &middot; F inspeccionar &middot; 1-8 cambiar de arma
       </div>
     </div>
   </div>
-  <div id="crosshair"></div>
   <div id="hud">
     <div id="hudArmaNombre"></div>
     <div id="hudMunicion"></div>
@@ -185,15 +258,34 @@
   </div>
   <div id="avisoMesa">presiona E para abrir el banco de trabajo</div>
   <div id="banco">
-    <div class="panel">
-      <h2>Banco de trabajo</h2>
-      <p class="subtitulo">arma tu combinación — se ve tendida sobre la mesa, se aplica al confirmar</p>
-      <div id="bancoContenido"></div>
-      <div id="bancoStats" class="stats-arma"></div>
-      <button id="btnVista3D" class="terciario">Ver en 3D — girar con el mouse</button>
-      <div class="botones">
-        <button id="btnCerrarBanco" class="secundario">Cerrar</button>
-        <button id="btnAplicarArma" class="principal">Aplicar y cerrar</button>
+    <div class="armeria">
+      <div class="barra-sup">
+        <div class="titulo-arma">
+          <h2 id="bancoNombreArma">Armería</h2>
+          <span class="tipo" id="bancoTipoArma"></span>
+        </div>
+        <div class="medidor-peso">
+          <span>PESO DEL ARMA</span>
+          <div class="barra"><div class="relleno" id="bancoPesoRelleno"></div></div>
+          <span id="bancoPesoTexto">0.0 kg</span>
+        </div>
+      </div>
+
+      <div class="cuerpo-armeria">
+        <div class="columna" id="bancoContenido"></div>
+        <!-- el centro se deja libre a propósito: por ahí se ve el
+             arma REAL sobre la mesa, actualizándose en vivo -->
+        <div class="centro-vacio"></div>
+        <div class="columna" id="bancoStats"></div>
+      </div>
+
+      <div class="barra-inf">
+        <span class="pista-teclas">Las piezas incompatibles con el cuerpo actual se omiten automáticamente</span>
+        <div class="acciones">
+          <button id="btnVista3D" class="terciario">Inspeccionar 3D</button>
+          <button id="btnCerrarBanco" class="secundario">Salir</button>
+          <button id="btnAplicarArma" class="principal">Equipar</button>
+        </div>
       </div>
     </div>
   </div>

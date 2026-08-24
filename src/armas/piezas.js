@@ -151,6 +151,10 @@ export const BOCAS = {
   // reduce el retroceso menos que el compensador, pero SÍ cuesta
   // daño y alcance — el intercambio real, no hay opción dominante
   silenciador: { nombre: 'Silenciador', peso: 0.35, modRetroceso: -0.12, modDaño: -3, modAlcance: -5 },
+  // el mejor control de retroceso de las 4 — pero es la más
+  // pesada, así que sí cuesta algo (afecta el peso total del
+  // inventario, no una estadística directa del arma)
+  compensadorPesado: { nombre: 'Compensador pesado', peso: 0.26, modRetroceso: -0.3, modDaño: 0, modAlcance: 0 },
 };
 
 export const EMPUÑADURAS = {
@@ -185,8 +189,10 @@ export const ACABADOS = {
   // hecho tú mismo con prisa, y se comporta así
   fabrica: { nombre: 'De fábrica', peso: 0, modPrecision: 0, color: 0x2a2a2e },
   tactico: { nombre: 'Táctico', peso: 0, modPrecision: 0, color: 0x3a3f34 },
+  camuflaje: { nombre: 'Camuflaje', peso: 0, modPrecision: 0, color: 0x5a5240 },
   pulido: { nombre: 'Pulido', peso: 0, modPrecision: 0, color: 0x8a8f96 },
   artesanal: { nombre: 'Artesanal', peso: 0, modPrecision: -0.03, color: 0x6b3a28 },
+  envejecido: { nombre: 'Envejecido', peso: 0, modPrecision: 0, color: 0x4a4642 },
 };
 
 /* No toda pieza cabe en toda arma — armas de mano (pistola,
@@ -208,10 +214,17 @@ export const COMPATIBILIDAD = {
   },
   cargador: {
     // el revólver no usa cargador de caja — nunca cabría un tambor
-    tambor: ['pistola', 'subfusil', 'rifle', 'escopeta', 'automatica', 'lmg', 'francotirador'],
+    // un francotirador de cerrojo no combina con un cargador de
+    // disparo sostenido, y una pistola es demasiado chica para
+    // sostener algo tan grande
+    tambor: ['subfusil', 'rifle', 'escopeta', 'automatica', 'lmg'],
   },
   cañon: {
     pesado: CUERPOS_LARGOS,
+  },
+  boca: {
+    // demasiado pesado para un arma de mano compacta
+    compensadorPesado: CUERPOS_LARGOS,
   },
 };
 

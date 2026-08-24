@@ -31,6 +31,45 @@ function generarColisionesPared(x1, z1, x2, z2, radio = 0.55, espaciado = 0.9) {
   return puntos;
 }
 
+/* El marco de una puerta — jambas a los lados y dintel arriba.
+   Sin esto las puertas eran huecos pelados en la pared, que es
+   parte de lo que hacía que todo se leyera como cajas lisas.    */
+function construirMarcoPuerta(scene, z, medioAncho, material) {
+  const GROSOR_MARCO = 0.09;
+  const ALTO_PUERTA = 2.25;
+
+  for (const lado of [-1, 1]) {
+    const jamba = new THREE.Mesh(
+      new THREE.BoxGeometry(GROSOR_MARCO, ALTO_PUERTA, GROSOR_PARED + 0.06),
+      material
+    );
+    jamba.position.set(lado * medioAncho, ALTO_PUERTA / 2, z);
+    jamba.castShadow = true;
+    jamba.receiveShadow = true;
+    scene.add(jamba);
+  }
+
+  const dintel = new THREE.Mesh(
+    new THREE.BoxGeometry(medioAncho * 2 + GROSOR_MARCO, GROSOR_MARCO, GROSOR_PARED + 0.06),
+    material
+  );
+  dintel.position.set(0, ALTO_PUERTA, z);
+  dintel.castShadow = true;
+  dintel.receiveShadow = true;
+  scene.add(dintel);
+
+  // el trozo de pared que va ARRIBA del dintel — antes el hueco
+  // llegaba hasta el techo, lo que se veía como un boquete
+  const cabecero = new THREE.Mesh(
+    new THREE.BoxGeometry(medioAncho * 2, ALTO_PARED - ALTO_PUERTA, GROSOR_PARED),
+    material
+  );
+  cabecero.position.set(0, (ALTO_PARED + ALTO_PUERTA) / 2, z);
+  cabecero.castShadow = true;
+  cabecero.receiveShadow = true;
+  scene.add(cabecero);
+}
+
 function construirPared(scene, x1, z1, x2, z2, material) {
   const longitud = Math.hypot(x2 - x1, z2 - z1);
   const pared = new THREE.Mesh(
@@ -64,6 +103,7 @@ export function crearTaller(scene) {
   meshesDisparables.push(construirPared(scene, HUECO_PUERTA, 4, 5, 4, materialPared));
   colisionablesJugador.push(...generarColisionesPared(-5, 4, -HUECO_PUERTA, 4));
   colisionablesJugador.push(...generarColisionesPared(HUECO_PUERTA, 4, 5, 4));
+  construirMarcoPuerta(scene, 4, HUECO_PUERTA, materialPared);
 
   // pared norte: ahora con puerta interna hacia la cabina (mismo
   // edificio, un solo recorrido cerrado de principio a fin)
@@ -71,6 +111,7 @@ export function crearTaller(scene) {
   meshesDisparables.push(construirPared(scene, HUECO_PUERTA, 16, 5, 16, materialPared));
   colisionablesJugador.push(...generarColisionesPared(-5, 16, -HUECO_PUERTA, 16));
   colisionablesJugador.push(...generarColisionesPared(HUECO_PUERTA, 16, 5, 16));
+  construirMarcoPuerta(scene, 16, HUECO_PUERTA, materialPared);
 
   // pared este y oeste — sólidas, sin huecos
   meshesDisparables.push(construirPared(scene, -5, 4, -5, 16, materialPared));
@@ -110,16 +151,35 @@ export function crearTaller(scene) {
   lampara2.castShadow = true;
   scene.add(lampara2);
 
-  // la mesa de trabajo — todavía sin lógica real detrás, es el
-  // lugar físico donde va a vivir la fabricación cuando exista
+  // la mesa de trabajo — tablero con patas, no un bloque macizo
+  // hasta el suelo como estaba antes
   const mesa = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 0.85, 1),
+    new THREE.BoxGeometry(2.2, 0.09, 1),
     materialMadera
   );
-  mesa.position.set(0, 0.425, 14.5);
+  mesa.position.set(0, 0.805, 14.5);
   mesa.castShadow = true;
   mesa.receiveShadow = true;
   scene.add(mesa);
+
+  const materialPata = new THREE.MeshStandardMaterial({ color: 0x2e2b26, roughness: 0.7, metalness: 0.4 });
+  for (const dx of [-1.0, 1.0]) {
+    for (const dz of [-0.42, 0.42]) {
+      const pata = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.76, 0.07), materialPata);
+      pata.position.set(dx, 0.38, 14.5 + dz);
+      pata.castShadow = true;
+      scene.add(pata);
+    }
+  }
+  // travesaño inferior, une las patas — detalle chico que hace
+  // que se lea como un mueble armado y no cuatro palos sueltos
+  for (const dz of [-0.42, 0.42]) {
+    const travesano = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.05, 0.05), materialPata);
+    travesano.position.set(0, 0.15, 14.5 + dz);
+    travesano.castShadow = true;
+    scene.add(travesano);
+  }
+
   // 3 puntos en vez de un solo círculo grande — la mesa es rectangular
   // y alargada (2.2m), un solo círculo centrado se queda flotando
   // bastante más allá de la orilla real y no dejaba acercarse
@@ -128,10 +188,83 @@ export function crearTaller(scene) {
   }
   meshesDisparables.push(mesa);
 
+  /* ── mobiliario del taller ────────────────────────────────
+     Estantería contra la pared oeste, con cajas encima, y un
+     banco de herramientas en la esquina. El cuarto era cuatro
+     paredes lisas y una mesa — esto es lo que lo hace leerse
+     como un taller de verdad donde alguien trabaja.            */
+  const materialEstante = new THREE.MeshStandardMaterial({ color: 0x3d3a34, roughness: 0.8, metalness: 0.3 });
+  const materialCaja = new THREE.MeshStandardMaterial({ color: 0x6b5a3e, roughness: 0.9 });
+
+  for (const alturaEstante of [0.5, 1.05, 1.6]) {
+    const tabla = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 3.2), materialEstante);
+    tabla.position.set(-4.6, alturaEstante, 9.5);
+    tabla.castShadow = true;
+    tabla.receiveShadow = true;
+    scene.add(tabla);
+    meshesDisparables.push(tabla);
+  }
+  for (const dz of [-1.5, 1.5]) {
+    const montante = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.9, 0.06), materialEstante);
+    montante.position.set(-4.6, 0.95, 9.5 + dz);
+    montante.castShadow = true;
+    scene.add(montante);
+  }
+  colisionablesJugador.push(
+    { mesh: { position: { x: -4.6, z: 8.3 } }, radio: 0.5 },
+    { mesh: { position: { x: -4.6, z: 9.5 } }, radio: 0.5 },
+    { mesh: { position: { x: -4.6, z: 10.7 } }, radio: 0.5 },
+  );
+
+  // cajas sobre los estantes, de tamaños variados
+  const cajasEstante = [
+    [-4.6, 0.63, 8.6, 0.22], [-4.6, 0.66, 9.4, 0.28],
+    [-4.6, 1.19, 10.3, 0.24], [-4.6, 1.16, 9.0, 0.18],
+    [-4.6, 1.74, 8.7, 0.22],
+  ];
+  for (const [x, y, z, tam] of cajasEstante) {
+    const caja = new THREE.Mesh(new THREE.BoxGeometry(0.34, tam, tam * 1.3), materialCaja);
+    caja.position.set(x, y, z);
+    caja.castShadow = true;
+    caja.receiveShadow = true;
+    scene.add(caja);
+    meshesDisparables.push(caja);
+  }
+
+  // banco de herramientas en la esquina noreste
+  const bancoHerramientas = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 0.6), materialEstante);
+  bancoHerramientas.position.set(4.1, 0.45, 15.4);
+  bancoHerramientas.castShadow = true;
+  bancoHerramientas.receiveShadow = true;
+  scene.add(bancoHerramientas);
+  meshesDisparables.push(bancoHerramientas);
+  colisionablesJugador.push({ mesh: { position: { x: 4.1, z: 15.4 } }, radio: 0.85 });
+
+  // panel perforado sobre el banco, con siluetas de herramientas
+  const panelHerramientas = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 1.0, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x33302b, roughness: 0.85 })
+  );
+  panelHerramientas.position.set(4.1, 1.65, 15.72);
+  panelHerramientas.receiveShadow = true;
+  scene.add(panelHerramientas);
+  const materialHerramienta = new THREE.MeshStandardMaterial({ color: 0x21201d, roughness: 0.6, metalness: 0.5 });
+  for (const [dx, dy, ancho, alto] of [[-0.5, 0.2, 0.06, 0.34], [-0.2, 0.16, 0.1, 0.26], [0.15, 0.22, 0.05, 0.38], [0.48, 0.14, 0.13, 0.22]]) {
+    const herramienta = new THREE.Mesh(new THREE.BoxGeometry(ancho, alto, 0.03), materialHerramienta);
+    herramienta.position.set(4.1 + dx, 1.65 + dy, 15.69);
+    scene.add(herramienta);
+  }
+
   return {
     colisionablesJugador,
     meshesDisparables,
     puntoAparicion: new THREE.Vector3(0, 0, 10),
     posicionMesa: mesa.position.clone(),
+    // la SUPERFICIE real donde se apoyan las cosas — antes cada
+    // módulo la calculaba por su cuenta sumando un valor fijo, y
+    // al cambiar la mesa (de bloque macizo a tablero con patas)
+    // todo eso se desalineaba. Exponerla aquí lo hace a prueba
+    // de futuros cambios de la mesa.
+    superficieMesa: mesa.position.clone().setY(mesa.position.y + 0.045),
   };
 }

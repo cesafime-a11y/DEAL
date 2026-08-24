@@ -19,10 +19,17 @@ export function crearVista3D(canvasEl) {
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.15));
   const luzPrincipal = new THREE.DirectionalLight(0xffe4bd, 1.8);
   luzPrincipal.position.set(1.4, 1.8, 1.2);
+  luzPrincipal.castShadow = true;
+  luzPrincipal.shadow.mapSize.set(1024, 1024);
+  luzPrincipal.shadow.camera.left = -0.4; luzPrincipal.shadow.camera.right = 0.4;
+  luzPrincipal.shadow.camera.top = 0.4; luzPrincipal.shadow.camera.bottom = -0.4;
+  luzPrincipal.shadow.bias = -0.002;
   scene.add(luzPrincipal);
   const luzRelleno = new THREE.DirectionalLight(0x7f96ff, 0.55);
   luzRelleno.position.set(-1.3, 0.3, -0.8);
@@ -30,6 +37,17 @@ export function crearVista3D(canvasEl) {
   const luzTrasera = new THREE.DirectionalLight(0xffffff, 0.4);
   luzTrasera.position.set(0, 0.5, -1.5);
   scene.add(luzTrasera);
+
+  // un plano de apoyo, sutil — sin esto el arma se sentía flotando
+  // en el vacío, sin ningún punto de contacto con nada
+  const piso = new THREE.Mesh(
+    new THREE.CircleGeometry(0.32, 24),
+    new THREE.MeshStandardMaterial({ color: 0x1c1a17, roughness: 0.95 })
+  );
+  piso.rotation.x = -Math.PI / 2;
+  piso.position.y = -0.4;   // verificado contra la combinación más grande posible (francotirador+cargador grande llega a Y=-0.342)
+  piso.receiveShadow = true;
+  scene.add(piso);
 
   let modeloActual = null;
   let activo = false;

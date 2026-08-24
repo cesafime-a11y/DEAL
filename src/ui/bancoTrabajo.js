@@ -21,20 +21,27 @@ import { crearVista3D } from './vista3D.js';
    fija, encuadrada una sola vez con números reales (verificado
    que hasta el arma más larga posible cabe completa en cuadro),
    y se restaura tu posición/orientación real al cerrar.         */
-const PITCH_VISTA_BANCO = -75 * Math.PI / 180;
-const ALTURA_CAMARA_BANCO = 1.5;
-const DESPLAZAMIENTO_Z_CAMARA_BANCO = 0.4;
+/* Con el rediseño de armería el arma va CENTRADA en pantalla, con
+   las columnas de accesorios y estadísticas a los lados — así que
+   la vista dejó de ser tan cenital (era casi desde arriba, para
+   caber junto a un panel lateral) y ahora es un ángulo de 3/4 que
+   lee mejor la silueta. Los valores salieron de proyectar el arma
+   más larga posible y medir cuánto ocupa en pantalla: ~40% del
+   ancho, que cabe cómodo entre las dos columnas.                 */
+const PITCH_VISTA_BANCO = -25 * Math.PI / 180;
+const ALTURA_CAMARA_BANCO = 0.4;
+const DESPLAZAMIENTO_Z_CAMARA_BANCO = 0.9;
 
 const CATEGORIAS = [
-  { clave: 'cuerpo', catalogo: CUERPOS, etiqueta: 'Cuerpo' },
-  { clave: 'cañon', catalogo: CAÑONES, etiqueta: 'Cañón', porDefecto: 'estandar' },
-  { clave: 'cargador', catalogo: CARGADORES, etiqueta: 'Cargador', porDefecto: 'medio' },
-  { clave: 'mira', catalogo: MIRAS, etiqueta: 'Mira', porDefecto: 'ninguna' },
-  { clave: 'boca', catalogo: BOCAS, etiqueta: 'Boca de cañón', porDefecto: 'ninguna' },
-  { clave: 'empuñadura', catalogo: EMPUÑADURAS, etiqueta: 'Empuñadura inferior', porDefecto: 'ninguna' },
-  { clave: 'gatillo', catalogo: GATILLOS, etiqueta: 'Gatillo', porDefecto: 'ninguno' },
-  { clave: 'municion', catalogo: MUNICIONES, etiqueta: 'Munición', porDefecto: 'estandar' },
-  { clave: 'acabado', catalogo: ACABADOS, etiqueta: 'Acabado', porDefecto: 'fabrica' },
+  { clave: 'cuerpo', catalogo: CUERPOS, etiqueta: 'Cuerpo', grupo: 'Plataforma' },
+  { clave: 'cañon', catalogo: CAÑONES, etiqueta: 'Cañón', porDefecto: 'estandar', grupo: 'Plataforma' },
+  { clave: 'cargador', catalogo: CARGADORES, etiqueta: 'Cargador', porDefecto: 'medio', grupo: 'Plataforma' },
+  { clave: 'mira', catalogo: MIRAS, etiqueta: 'Mira', porDefecto: 'ninguna', grupo: 'Accesorios' },
+  { clave: 'boca', catalogo: BOCAS, etiqueta: 'Boca de cañón', porDefecto: 'ninguna', grupo: 'Accesorios' },
+  { clave: 'empuñadura', catalogo: EMPUÑADURAS, etiqueta: 'Empuñadura inferior', porDefecto: 'ninguna', grupo: 'Accesorios' },
+  { clave: 'gatillo', catalogo: GATILLOS, etiqueta: 'Gatillo', porDefecto: 'ninguno', grupo: 'Ajuste fino' },
+  { clave: 'municion', catalogo: MUNICIONES, etiqueta: 'Munición', porDefecto: 'estandar', grupo: 'Ajuste fino' },
+  { clave: 'acabado', catalogo: ACABADOS, etiqueta: 'Acabado', porDefecto: 'fabrica', grupo: 'Ajuste fino' },
 ];
 
 export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioInteraccion, controls, camera, exhibidor, onAplicar }) {
@@ -57,6 +64,29 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
   const contenido = document.getElementById('bancoContenido');
   const statsEl = document.getElementById('bancoStats');
   const aviso = document.getElementById('avisoMesa');
+  const nombreArmaEl = document.getElementById('bancoNombreArma');
+  const tipoArmaEl = document.getElementById('bancoTipoArma');
+  const pesoRellenoEl = document.getElementById('bancoPesoRelleno');
+  const pesoTextoEl = document.getElementById('bancoPesoTexto');
+
+  /* Guarda las estadísticas ANTES del último cambio de pieza, para
+     poder dibujar el "fantasma" en las barras y el delta de color:
+     así ves de un vistazo si la pieza que acabas de montar te subió
+     o te bajó cada número, en vez de tener que recordarlo.        */
+  let statsPrevias = null;
+
+  /* Rangos usados para dibujar las barras — no son límites duros
+     del juego, solo la escala visual contra la que se compara cada
+     estadística para que la barra signifique algo.                */
+  const RANGOS_STATS = {
+    daño: [8, 45], cadencia: [0.5, 15], alcance: [15, 65],
+    precision: [0.45, 1], capacidad: [5, 45], tiempoRecarga: [0.8, 3.5],
+  };
+
+  function porcentajeStat(clave, valor) {
+    const [min, max] = RANGOS_STATS[clave];
+    return Math.max(0, Math.min(1, (valor - min) / (max - min))) * 100;
+  }
   let abierto = false;
 
   function piezasActuales() {
@@ -75,47 +105,116 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
 
   function renderizar() {
     contenido.innerHTML = '';
+    let grupoAnterior = null;
     for (const cat of CATEGORIAS) {
+      if (cat.grupo !== grupoAnterior) {
+        const encabezado = document.createElement('div');
+        encabezado.className = 'encabezado-col' + (grupoAnterior === null ? '' : ' secundario');
+        encabezado.textContent = cat.grupo;
+        contenido.appendChild(encabezado);
+        grupoAnterior = cat.grupo;
+      }
+
+      // solo las piezas que de verdad caben en este cuerpo — así el
+      // contador ("2 / 5") refleja opciones REALES, no el catálogo
+      // completo con opciones que nunca vas a poder montar
+      const clavesCompatibles = Object.keys(cat.catalogo)
+        .filter((k) => esPiezaCompatible(cat.clave, k, seleccion.cuerpo));
+      const idxEnCompatibles = clavesCompatibles.indexOf(seleccion[cat.clave]);
       const claves = Object.keys(cat.catalogo);
       const idxActual = claves.indexOf(seleccion[cat.clave]);
 
-      const fila = document.createElement('div');
-      fila.className = 'fila-pieza';
+      const pieza = cat.catalogo[seleccion[cat.clave]];
+      const esVacio = /^(Sin |Ning)/i.test(pieza.nombre);
+
+      const ranura = document.createElement('div');
+      ranura.className = 'ranura' + (esVacio ? '' : ' ocupada');
 
       const flechaIzq = document.createElement('button');
       flechaIzq.className = 'flecha';
       flechaIzq.textContent = '‹';
       flechaIzq.onclick = (e) => { e.stopPropagation(); cambiar(cat, idxActual, claves, -1); };
 
-      const info = document.createElement('div');
-      info.className = 'info-pieza';
-      const etiqueta = document.createElement('span');
-      etiqueta.className = 'etiqueta-pieza';
-      etiqueta.textContent = cat.etiqueta;
-      const nombre = document.createElement('span');
-      nombre.className = 'nombre-pieza';
-      nombre.textContent = cat.catalogo[seleccion[cat.clave]].nombre;
-      info.append(etiqueta, nombre);
+      const datos = document.createElement('div');
+      datos.className = 'datos';
+      const cat_ = document.createElement('span');
+      cat_.className = 'cat';
+      cat_.textContent = cat.etiqueta;
+      const val = document.createElement('span');
+      val.className = 'val' + (esVacio ? ' vacio' : '');
+      val.textContent = esVacio ? 'vacío' : pieza.nombre;
+      const contador = document.createElement('span');
+      contador.className = 'contador';
+      contador.textContent = `${idxEnCompatibles + 1} / ${clavesCompatibles.length}`;
+      datos.append(cat_, val, contador);
 
       const flechaDer = document.createElement('button');
       flechaDer.className = 'flecha';
       flechaDer.textContent = '›';
       flechaDer.onclick = (e) => { e.stopPropagation(); cambiar(cat, idxActual, claves, 1); };
 
-      fila.append(flechaIzq, info, flechaDer);
-      contenido.appendChild(fila);
+      ranura.append(flechaIzq, datos, flechaDer);
+      contenido.appendChild(ranura);
     }
 
     // estadísticas en vivo — se recalculan con cada cambio
     const stats = ensamblarArma(piezasActuales());
-    statsEl.innerHTML = `
-      <div class="stat"><span>Daño</span><b>${stats.daño}</b></div>
-      <div class="stat"><span>Cadencia</span><b>${stats.cadencia.toFixed(1)}/s</b></div>
-      <div class="stat"><span>Alcance</span><b>${stats.alcance}m</b></div>
-      <div class="stat"><span>Precisión</span><b>${Math.round(stats.precision * 100)}%</b></div>
-      <div class="stat"><span>Cargador</span><b>${stats.capacidad}</b></div>
-      <div class="stat"><span>Recarga</span><b>${stats.tiempoRecarga.toFixed(1)}s</b></div>
-    `;
+
+    // encabezado: nombre y tipo del arma que estás armando
+    nombreArmaEl.textContent = CUERPOS[seleccion.cuerpo].nombre.replace(/^Cuerpo de /, '').toUpperCase();
+    tipoArmaEl.textContent = `${CAÑONES[seleccion.cañon].nombre} · ${ACABADOS[seleccion.acabado].nombre}`;
+
+    // peso del arma armada (solo esta, no el inventario completo)
+    const pesoArma = CATEGORIAS.reduce(
+      (t, c) => t + (c.catalogo[seleccion[c.clave]].peso || 0), 0
+    );
+    const PESO_REFERENCIA = 8;   // kg, para la escala de la barra
+    const proporcionPeso = Math.min(1, pesoArma / PESO_REFERENCIA);
+    pesoRellenoEl.style.width = `${proporcionPeso * 100}%`;
+    pesoRellenoEl.classList.toggle('pesado', proporcionPeso > 0.72);
+    pesoTextoEl.textContent = `${pesoArma.toFixed(1)} kg`;
+
+    // barras de estadística, con "fantasma" del valor anterior para
+    // ver si el último cambio de pieza subió o bajó cada número
+    const definiciones = [
+      ['daño', 'Daño', stats.daño, (v) => String(v), false],
+      ['cadencia', 'Cadencia', stats.cadencia, (v) => v.toFixed(1) + '/s', false],
+      ['alcance', 'Alcance', stats.alcance, (v) => v + 'm', false],
+      ['precision', 'Precisión', stats.precision, (v) => Math.round(v * 100) + '%', false],
+      ['capacidad', 'Cargador', stats.capacidad, (v) => String(v), false],
+      // en la recarga, MENOS es mejor — se invierte para que la barra
+      // llena siga significando "mejor" en las seis
+      ['tiempoRecarga', 'Recarga', stats.tiempoRecarga, (v) => v.toFixed(1) + 's', true],
+    ];
+
+    let html = '<div class="encabezado-col">Estadísticas</div>';
+    for (const [clave, etiqueta, valor, formato, invertida] of definiciones) {
+      let pct = porcentajeStat(clave, valor);
+      if (invertida) pct = 100 - pct;
+
+      let fantasmaHtml = '', deltaHtml = '';
+      if (statsPrevias && statsPrevias[clave] !== valor) {
+        let pctPrevio = porcentajeStat(clave, statsPrevias[clave]);
+        if (invertida) pctPrevio = 100 - pctPrevio;
+        fantasmaHtml = `<div class="fantasma" style="width:${pctPrevio}%"></div>`;
+        const mejoro = pct > pctPrevio;
+        const dif = valor - statsPrevias[clave];
+        const signo = dif > 0 ? '+' : '';
+        deltaHtml = `<span class="delta ${mejoro ? 'sube' : 'baja'}">${signo}${
+          Number.isInteger(dif) ? dif : dif.toFixed(1)
+        }</span>`;
+      }
+
+      html += `
+        <div class="stat-barra">
+          <div class="fila">
+            <span class="nombre">${etiqueta}</span>
+            <span><span class="valor">${formato(valor)}</span>${deltaHtml}</span>
+          </div>
+          <div class="pista"><div class="lleno" style="width:${pct}%"></div>${fantasmaHtml}</div>
+        </div>`;
+    }
+    statsEl.innerHTML = html;
 
     // el arma tendida sobre la mesa, en el mundo real — misma
     // selección exacta, así se ve igual a lo que vas a llevarte
@@ -124,6 +223,11 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
   }
 
   function cambiar(cat, idxActual, claves, direccion) {
+    // guarda cómo estaban las estadísticas ANTES de este cambio —
+    // es lo que alimenta el "fantasma" y el delta de color en las
+    // barras, para ver de un vistazo qué mejoró y qué empeoró
+    statsPrevias = ensamblarArma(piezasActuales());
+
     if (cat.clave === 'cuerpo') {
       // cambiar el cuerpo puede volver incompatibles otras piezas
       // ya elegidas (un bípode no cabe en una pistola) — se
@@ -157,14 +261,13 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
     }
   }
 
-  const crosshair = document.getElementById('crosshair');
   const vista3D = crearVista3D(document.getElementById('vista3DCanvas'));
   const panelVista3D = document.getElementById('vista3D');
 
   document.getElementById('btnVista3D').onclick = (e) => {
     e.stopPropagation();
     panelVista3D.style.display = 'flex';
-    vista3D.activar(piezasActuales());
+    vista3D.activar({ ...seleccion });
   };
   document.getElementById('btnCerrarVista3D').onclick = (e) => {
     e.stopPropagation();
@@ -179,10 +282,10 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
   function abrir() {
     if (abierto) return;
     abierto = true;
+    statsPrevias = null;   // sin deltas de una sesión anterior
     renderizar();
-    panel.style.display = 'flex';
+    panel.style.display = 'block';
     controls.unlock();
-    crosshair.style.display = 'none';
 
     // guarda dónde estabas parado y hacia dónde mirabas, para
     // devolverte exactamente ahí al cerrar
@@ -201,7 +304,6 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
   function cerrar() {
     abierto = false;
     panel.style.display = 'none';
-    crosshair.style.display = 'block';
     exhibidor.ocultar();
     panelVista3D.style.display = 'none';
     vista3D.desactivar();

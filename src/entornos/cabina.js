@@ -51,24 +51,50 @@ function crearObjetivo(scene, colisionablesJugador, meshesDisparables, x, z) {
   poste.castShadow = true;
   scene.add(poste);
 
+  /* Pivote en la BASE del panel, no en su centro: al tumbarse tiene
+     que girar sobre su borde inferior, como una bisagra, no flotar
+     rotando sobre sí mismo en el aire.                            */
+  const pivote = new THREE.Group();
+  pivote.position.set(x, 1.1, z);
+  scene.add(pivote);
+
   const panel = new THREE.Mesh(
     new THREE.BoxGeometry(0.7, 1.3, 0.05),
     new THREE.MeshStandardMaterial({ color: 0xd8cfa8, roughness: 0.85 })
   );
-  panel.position.set(x, 1.75, z);
+  panel.position.set(0, 0.65, 0);   // relativo al pivote
   panel.castShadow = true;
   panel.receiveShadow = true;
-  scene.add(panel);
+  pivote.add(panel);
 
-  const centro = new THREE.Mesh(
-    new THREE.CircleGeometry(0.22, 20),
-    new THREE.MeshStandardMaterial({ color: 0x8a2020, roughness: 0.8 })
+  /* Anillos de puntuación concéntricos, en vez de un solo círculo
+     rojo — así se puede apreciar qué tan al centro pegaste, que es
+     justo lo que hace útil un campo de tiro para comparar armas.  */
+  const ANILLOS = [
+    [0.30, 0xb8ae90], [0.22, 0xa03030], [0.13, 0x8a2020], [0.055, 0xe8d8a0],
+  ];
+  ANILLOS.forEach(([radio, color], i) => {
+    const anillo = new THREE.Mesh(
+      new THREE.CircleGeometry(radio, 22),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.8 })
+    );
+    // cada anillo un pelo más adelante, para que no peleen entre sí
+    anillo.position.set(0, 0.65, 0.026 + i * 0.0012);
+    pivote.add(anillo);
+  });
+
+  // número de identificación arriba del panel
+  const placa = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 0.09, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a2c, roughness: 0.7 })
   );
-  centro.position.set(x, 1.75, z + 0.026);
-  scene.add(centro);
+  placa.position.set(0, 1.36, 0.02);
+  pivote.add(placa);
 
-  colisionablesJugador.push({ mesh: panel, radio: 0.5 });
+  colisionablesJugador.push({ mesh: { position: { x, z } }, radio: 0.5 });
   meshesDisparables.push(panel);
+
+  return { panel, pivote, poste };
 }
 
 export function crearCabina(scene) {
@@ -123,10 +149,84 @@ export function crearCabina(scene) {
     scene.add(lampara);
   }
 
-  // objetivos alineados, a distancias crecientes desde la puerta
-  for (const z of [26, 36, 46]) {
-    crearObjetivo(scene, colisionablesJugador, meshesDisparables, 0, z);
+  /* ── objetivos reactivos ───────────────────────────────────
+     Antes eran postes fijos: les disparabas y no pasaba nada, así
+     que no había forma de saber si acertaste más allá de la marca
+     de impacto. Ahora se tumban hacia atrás al recibir un tiro y
+     se vuelven a levantar solos, que es como funciona un campo de
+     tiro de verdad — y de paso te dice al instante si diste.     */
+  const objetivos = [];
+  const DISTANCIAS = [26, 36, 46];
+
+  for (const z of DISTANCIAS) {
+    const partes = crearObjetivo(scene, colisionablesJugador, meshesDisparables, 0, z);
+    // crearObjetivo puede no devolver nada (versión antigua) — en
+    // ese caso simplemente no hay reacción, sin romper nada
+    if (partes && partes.panel) {
+      objetivos.push({
+        panel: partes.panel,
+        pivote: partes.pivote || partes.panel,
+        anguloActual: 0,
+        objetivoAngulo: 0,
+        tiempoTumbado: 0,
+      });
+    }
   }
 
-  return { colisionablesJugador, meshesDisparables };
+  /* Marcas de distancia en el piso: una línea clara frente a cada
+     objetivo. Sin esto no había ninguna referencia de a qué
+     distancia estabas tirando, y el alcance de las armas (que sí
+     varía mucho entre piezas) no se podía apreciar.              */
+  const materialMarca = new THREE.MeshStandardMaterial({
+    color: 0x7e8890, roughness: 0.9, transparent: true, opacity: 0.5,
+  });
+  for (const z of DISTANCIAS) {
+    const linea = new THREE.Mesh(new THREE.PlaneGeometry(9.2, 0.06), materialMarca);
+    linea.rotation.x = -Math.PI / 2;
+    linea.position.set(0, 0.013, z);
+    scene.add(linea);
+    // dos marcas cortas a los lados, como topes de carril
+    for (const x of [-4.2, 4.2]) {
+      const tope = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.22), materialMarca);
+      tope.rotation.x = -Math.PI / 2;
+      tope.position.set(x, 0.013, z);
+      scene.add(tope);
+    }
+  }
+
+  /* Avisa que un objetivo recibió un impacto — main.js lo llama
+     cuando el raycast pega en alguna de sus mallas. Devuelve true
+     si de verdad correspondía a un objetivo, para que quien llama
+     sepa si contarlo como acierto.                               */
+  function registrarImpacto(meshGolpeada) {
+    for (const obj of objetivos) {
+      let corresponde = false;
+      obj.panel.traverse((o) => { if (o === meshGolpeada) corresponde = true; });
+      if (obj.panel === meshGolpeada) corresponde = true;
+      if (!corresponde) continue;
+      obj.objetivoAngulo = -Math.PI / 2.1;   // se tumba hacia atrás
+      obj.tiempoTumbado = 1.6;               // segundos antes de levantarse
+      return true;
+    }
+    return false;
+  }
+
+  /* Se llama cada cuadro desde main.js — anima el tumbado y el
+     levantado de los objetivos.                                  */
+  function actualizar(dt) {
+    for (const obj of objetivos) {
+      if (obj.tiempoTumbado > 0) {
+        obj.tiempoTumbado -= dt;
+        if (obj.tiempoTumbado <= 0) obj.objetivoAngulo = 0;   // se vuelve a parar
+      }
+      const dif = obj.objetivoAngulo - obj.anguloActual;
+      if (Math.abs(dif) < 0.001) continue;
+      // cae rápido, se levanta más despacio — se siente con peso
+      const velocidad = obj.objetivoAngulo < obj.anguloActual ? 13 : 4.5;
+      obj.anguloActual += dif * Math.min(1, velocidad * dt);
+      obj.pivote.rotation.x = obj.anguloActual;
+    }
+  }
+
+  return { colisionablesJugador, meshesDisparables, registrarImpacto, actualizar };
 }

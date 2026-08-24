@@ -5,7 +5,7 @@
    bucle principal.
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
-import { crearMundo, marcarImpacto } from './core/mundo.js';
+import { crearMundo } from './core/mundo.js';
 import { crearJugador } from './core/jugador.js';
 import { crearArma } from './armas/arma.js';
 import { crearCielo } from './graficos/cielo.js';
@@ -19,6 +19,10 @@ import { crearBancoTrabajo } from './ui/bancoTrabajo.js';
 import { crearExhibidorArma } from './entornos/exhibidorArma.js';
 import { crearInventario } from './armas/inventario.js';
 import { crearHud } from './ui/hud.js';
+import {
+  iniciarAudio, sonidoDisparo, sonidoVacio, sonidoRecarga, sonidoPaso,
+  sonidoConfirmar, parametrosDisparoDeArma,
+} from './audio/sfx.js';
 
 const { scene, camera, renderer, sol, ALTURA_OJOS } = crearMundo();
 const efectos = crearEfectos(scene);
@@ -84,7 +88,7 @@ const hud = crearHud();
 
 // el arma tendida sobre la mesa, en el mundo real — se actualiza
 // en vivo mientras armas piezas en el banco de trabajo
-const exhibidor = crearExhibidorArma(scene, taller.posicionMesa);
+const exhibidor = crearExhibidorArma(scene, taller.superficieMesa);
 
 // el banco de trabajo — se abre con E cerca de la mesa, y al
 // confirmar cambia el arma que traes cargada de verdad (estadísticas
@@ -93,12 +97,13 @@ const exhibidor = crearExhibidorArma(scene, taller.posicionMesa);
 const posicionMesaJugador = taller.posicionMesa.clone().setY(ALTURA_OJOS);
 const banco = crearBancoTrabajo({
   posicionMesa: posicionMesaJugador,
-  posicionExhibidor: taller.posicionMesa.clone().setY(taller.posicionMesa.y + 0.425 + 0.05),   // centro + mitad del alto (0.85/2) + margen — misma fórmula que exhibidorArma.js
+  posicionExhibidor: taller.superficieMesa.clone().setY(taller.superficieMesa.y + 0.05),   // la superficie ya viene calculada del taller, solo el margen del arma
   radioInteraccion: 2.2,
   controls: jugador.controls,
   camera,
   exhibidor,
   onAplicar: (nuevasEstadisticas, nuevaSeleccion) => {
+    sonidoConfirmar();
     inventario.actualizarActivo(nuevaSeleccion);
     arma.actualizarArma(nuevasEstadisticas, nuevaSeleccion);
   },
@@ -113,6 +118,7 @@ const menuPausa = document.getElementById('menuPausa');
 let juegoIniciado = false;
 
 document.getElementById('btnJugar').onclick = () => {
+  iniciarAudio();   // el navegador solo permite audio tras un gesto real del usuario
   juegoIniciado = true;
   menuPrincipal.style.display = 'none';
   jugador.controls.lock();
@@ -147,8 +153,21 @@ const TECLAS_INVENTARIO = {
   Digit5: 4, Digit6: 5, Digit7: 6, Digit8: 7,
 };
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && jugador.controls.isLocked) arma.recargar();
+  if (e.code === 'KeyR' && jugador.controls.isLocked) {
+    const antes = arma.estado();
+    arma.recargar();
+    // solo suena si la recarga de verdad arrancó — presionar R con
+    // el cargador lleno no hace nada, y tampoco debería sonar
+    if (!antes.recargando && arma.estado().recargando) {
+      const sel = inventario.armaActiva();
+      sonidoRecarga(sel ? (CARGADORES[sel.cargador]?.peso ?? 0.2) : 0.2);
+    }
+  }
   if (e.code === 'KeyE' && jugador.controls.isLocked && cercaDeLaMesa) banco.abrir();
+  if (e.code === 'KeyF' && jugador.controls.isLocked && !banco.abierto) arma.inspeccionar(true);
+});
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'KeyF') arma.inspeccionar(false);
 
   if (jugador.controls.isLocked && e.code in TECLAS_INVENTARIO) {
     inventario.seleccionar(TECLAS_INVENTARIO[e.code]);
@@ -164,7 +183,17 @@ document.addEventListener('keydown', (e) => {
 const raycaster = new THREE.Raycaster();
 function intentarDisparar() {
   const disparo = arma.disparar();
-  if (!disparo) return;
+  if (!disparo) {
+    // click seco: solo si de verdad es por falta de balas, no por
+    // estar recargando o esperando la cadencia
+    const est = arma.estado();
+    if (!est.sinArma && !est.recargando && est.balas === 0) sonidoVacio();
+    return;
+  }
+
+  const seleccionActual = inventario.armaActiva();
+  sonidoDisparo(parametrosDisparoDeArma(null, seleccionActual.cuerpo, seleccionActual.boca));
+
   // siempre es una LISTA — armas normales traen 1 proyectil, la
   // escopeta trae varios (perdigones) — el mismo código sirve para
   // ambos casos, no hace falta distinguir aquí qué arma es
@@ -176,12 +205,34 @@ function intentarDisparar() {
     const destino = impactos.length > 0
       ? impactos[0].point
       : disparo.origen.clone().addScaledVector(proyectil.direccion, disparo.alcance);
-    if (impactos.length > 0) marcarImpacto(impactos[0].object);
+    if (impactos.length > 0) {
+      // ya no se tiñe de rojo el objeto golpeado: en una pared
+      // grande eso pintaba TODA la pared, que se veía muy mal.
+      // La marca de impacto persistente comunica el acierto mucho
+      // mejor, y en el lugar exacto donde pegó.
+      const normal = impactos[0].face
+        ? impactos[0].face.normal.clone().transformDirection(impactos[0].object.matrixWorld)
+        : proyectil.direccion.clone().negate();
+      efectos.marcaImpacto(destino, normal);
+      // si fue un objetivo de la cabina, se tumba y se vuelve a
+      // levantar solo — confirmación inmediata de que acertaste
+      cabina.registrarImpacto(impactos[0].object);
+    }
     efectos.trazadoraBala(puntaCanon, destino, disparo.colorTrazadora);
   }
+
+  // casquillo y humo: uno por DISPARO, no por perdigón (una
+  // escopeta expulsa un solo cartucho, no ocho)
+  const direccionArma = new THREE.Vector3();
+  camera.getWorldDirection(direccionArma);
+  efectos.eyectarCasquillo(puntaCanon.clone().addScaledVector(direccionArma, -0.15), direccionArma, 0.05);
+  const intensidadHumo = seleccionActual.boca === 'silenciador' ? 0.15 : 0.7;
+  efectos.humoCañon(puntaCanon, intensidadHumo, direccionArma);
 }
 
 /* ── bucle principal ───────────────────────────────────────── */
+let distanciaCaminada = 0;
+const DISTANCIA_POR_PASO = 1.9;   // metros entre paso y paso
 const reloj = new THREE.Clock();
 function animar() {
   requestAnimationFrame(animar);
@@ -193,11 +244,23 @@ function animar() {
   banco.actualizarVista3D();
   animador.actualizar(dt);
   efectos.actualizar(dt);
+  cabina.actualizar(dt);
 
   const factorPeso = inventario.factorPeso();
   const { velocidad } = jugador.actualizar(dt, apuntando, factorPeso);
-  arma.actualizar(dt, velocidad, apuntando, factorPeso);
+  if (!banco.abierto) arma.actualizar(dt, velocidad, apuntando, factorPeso);
+  else arma.reiniciarSacudida();
   hud.actualizar(arma.estado(), inventario);
+
+  // pasos por DISTANCIA, no por tiempo — caminar despacio da
+  // pasos más espaciados, sin necesitar temporizadores aparte
+  if (jugador.controls.isLocked && !banco.abierto) {
+    distanciaCaminada += velocidad * dt;
+    if (distanciaCaminada >= DISTANCIA_POR_PASO) {
+      distanciaCaminada = 0;
+      sonidoPaso();
+    }
+  }
 
   renderer.render(scene, camera);
 }

@@ -237,7 +237,7 @@ describe('catálogo de piezas', () => {
     expect(Object.keys(EMPUÑADURAS)).toHaveLength(4);
     expect(Object.keys(GATILLOS)).toHaveLength(3);
     expect(Object.keys(MUNICIONES)).toHaveLength(4);
-    expect(Object.keys(ACABADOS)).toHaveLength(4);
+    expect(Object.keys(ACABADOS)).toHaveLength(6);
   });
 
   it('el conteo de las categorías existentes creció como se acordó', () => {
@@ -245,7 +245,7 @@ describe('catálogo de piezas', () => {
     expect(Object.keys(CAÑONES)).toHaveLength(4);
     expect(Object.keys(CARGADORES)).toHaveLength(4);
     expect(Object.keys(MIRAS)).toHaveLength(6);
-    expect(Object.keys(BOCAS)).toHaveLength(4);
+    expect(Object.keys(BOCAS)).toHaveLength(5);
   });
 
   it('todas las bocas de cañón tienen los campos que ensamblar() necesita', () => {
@@ -292,3 +292,4 @@ describe('catálogo de piezas', () => {
     }
   });
 });
+
