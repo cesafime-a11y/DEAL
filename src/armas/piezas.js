@@ -17,6 +17,8 @@
 export const CUERPOS = {
   pistola: {
     nombre: 'Cuerpo de pistola',
+    calibre: '9mm',
+    escalaCasquillo: 0.85,
     peso: 0.7,          // kg
     cadencia: 4,          // disparos por segundo
     precision: 0.85,      // 0 a 1 — más alto es más certero
@@ -24,6 +26,8 @@ export const CUERPOS = {
   },
   subfusil: {
     nombre: 'Cuerpo de subfusil',
+    calibre: '9mm',
+    escalaCasquillo: 0.85,
     peso: 2.3,
     cadencia: 9,
     precision: 0.65,
@@ -31,6 +35,8 @@ export const CUERPOS = {
   },
   rifle: {
     nombre: 'Cuerpo de rifle',
+    calibre: '5.56mm',
+    escalaCasquillo: 1.15,
     peso: 3.2,
     cadencia: 5.5,
     precision: 0.78,
@@ -38,6 +44,8 @@ export const CUERPOS = {
   },
   escopeta: {
     nombre: 'Cuerpo de escopeta',
+    calibre: 'Calibre 12',
+    escalaCasquillo: 2.0,
     peso: 3.0,
     cadencia: 1.1,         // tipo bombeo — la más lenta del juego
     precision: 0.6,
@@ -51,6 +59,8 @@ export const CUERPOS = {
   },
   revolver: {
     nombre: 'Cuerpo de revólver',
+    calibre: '.357 Magnum',
+    escalaCasquillo: 1.0,
     peso: 0.9,
     cadencia: 2.2,
     precision: 0.93,       // el más alto del juego — no necesita mira
@@ -58,6 +68,8 @@ export const CUERPOS = {
   },
   automatica: {
     nombre: 'Cuerpo de pistola automática',
+    calibre: '9mm',
+    escalaCasquillo: 0.85,
     peso: 0.65,
     cadencia: 13,          // la cadencia más alta del juego
     precision: 0.55,       // la más baja — corta distancia, de emergencia
@@ -65,6 +77,8 @@ export const CUERPOS = {
   },
   lmg: {
     nombre: 'Cuerpo de ametralladora ligera',
+    calibre: '7.62mm',
+    escalaCasquillo: 1.5,
     peso: 5.5,          // la más pesada del juego
     cadencia: 7.5,         // sostenida, para suprimir, no para precisión
     precision: 0.58,
@@ -72,6 +86,8 @@ export const CUERPOS = {
   },
   francotirador: {
     nombre: 'Cuerpo de francotirador',
+    calibre: '.308 Winchester',
+    escalaCasquillo: 1.35,
     peso: 4.2,
     cadencia: 0.9,         // cerrojo — la más lenta del juego
     precision: 0.55,       // base modesta a propósito: sin cañón largo
@@ -129,6 +145,11 @@ export const MIRAS = {
   reflex: { nombre: 'Mira reflex', peso: 0.15, modPrecision: 0.07, zoom: 1.15 },
   holografica: { nombre: 'Mira holográfica', peso: 0.2, modPrecision: 0.09, zoom: 1.15 },
   telescopica: { nombre: 'Mira telescópica', peso: 0.4, modPrecision: 0.14, zoom: 1.8 },
+  // punto medio real entre un punto rojo y un visor completo:
+  // zoom fijo moderado, más precisión que el reflex, más ligera
+  // que la telescópica — para quien no quiere el compromiso de
+  // ninguna de las dos
+  prismatica: { nombre: 'Mira prismática', peso: 0.28, modPrecision: 0.11, zoom: 1.4 },
   // mecánica propia: apuntando casi no aporta (por eso zoom=1 y
   // modPrecision chico) — su función real es ayudar SIN apuntar,
   // algo que ninguna otra mira hace
@@ -151,6 +172,10 @@ export const BOCAS = {
   // reduce el retroceso menos que el compensador, pero SÍ cuesta
   // daño y alcance — el intercambio real, no hay opción dominante
   silenciador: { nombre: 'Silenciador', peso: 0.35, modRetroceso: -0.12, modDaño: -3, modAlcance: -5 },
+  // ranurado a los lados en vez de por delante: control de retroceso
+  // decente, casi sin costo de alcance — pero SÍ es ruidoso (no
+  // tiene ningún beneficio de sigilo, a diferencia del silenciador)
+  frenoRanurado: { nombre: 'Freno ranurado', peso: 0.15, modRetroceso: -0.16, modDaño: 0, modAlcance: -1 },
   // el mejor control de retroceso de las 4 — pero es la más
   // pesada, así que sí cuesta algo (afecta el peso total del
   // inventario, no una estadística directa del arma)
@@ -163,6 +188,9 @@ export const EMPUÑADURAS = {
   // retroceso mucho menos que la vertical
   angulada: { nombre: 'Empuñadura angulada', peso: 0.1, modRetroceso: -0.03, modCadencia: 0.4, modPrecision: 0, modVelocidadApuntado: 1 },
   vertical: { nombre: 'Empuñadura vertical', peso: 0.12, modRetroceso: -0.1, modCadencia: 0, modPrecision: 0, modVelocidadApuntado: 1 },
+  // tope de mano: casi no controla retroceso, pero es la más
+  // ligera de las tres y no cuesta nada de velocidad de apuntado
+  topeMano: { nombre: 'Tope de mano', peso: 0.04, modRetroceso: -0.02, modCadencia: 0, modPrecision: 0.01, modVelocidadApuntado: 1 },
   // el mejor control de retroceso y algo de precisión, pero el
   // peso tiene costo real: apuntar se vuelve notablemente más lento
   bipode: { nombre: 'Bípode', peso: 0.45, modRetroceso: -0.16, modCadencia: 0, modPrecision: 0.04, modVelocidadApuntado: 0.65 },
@@ -206,6 +234,7 @@ const CUERPOS_LARGOS = ['subfusil', 'rifle', 'escopeta', 'lmg', 'francotirador']
 export const COMPATIBILIDAD = {
   mira: {
     telescopica: CUERPOS_LARGOS,
+    prismatica: CUERPOS_LARGOS,
   },
   empuñadura: {
     vertical: CUERPOS_LARGOS,
