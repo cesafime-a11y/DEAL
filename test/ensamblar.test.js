@@ -234,7 +234,7 @@ describe('ensamblarArma — categorías nuevas (opcionales)', () => {
 
 describe('catálogo de piezas', () => {
   it('el conteo de las 4 categorías nuevas es el acordado', () => {
-    expect(Object.keys(EMPUÑADURAS)).toHaveLength(4);
+    expect(Object.keys(EMPUÑADURAS)).toHaveLength(5);
     expect(Object.keys(GATILLOS)).toHaveLength(3);
     expect(Object.keys(MUNICIONES)).toHaveLength(4);
     expect(Object.keys(ACABADOS)).toHaveLength(6);
@@ -244,8 +244,8 @@ describe('catálogo de piezas', () => {
     expect(Object.keys(CUERPOS)).toHaveLength(8);
     expect(Object.keys(CAÑONES)).toHaveLength(4);
     expect(Object.keys(CARGADORES)).toHaveLength(4);
-    expect(Object.keys(MIRAS)).toHaveLength(6);
-    expect(Object.keys(BOCAS)).toHaveLength(5);
+    expect(Object.keys(MIRAS)).toHaveLength(7);
+    expect(Object.keys(BOCAS)).toHaveLength(6);
   });
 
   it('todas las bocas de cañón tienen los campos que ensamblar() necesita', () => {
@@ -292,4 +292,3 @@ describe('catálogo de piezas', () => {
     }
   });
 });
-
