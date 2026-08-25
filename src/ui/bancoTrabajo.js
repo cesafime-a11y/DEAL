@@ -162,7 +162,7 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
 
     // encabezado: nombre y tipo del arma que estás armando
     nombreArmaEl.textContent = CUERPOS[seleccion.cuerpo].nombre.replace(/^Cuerpo de /, '').toUpperCase();
-    tipoArmaEl.textContent = `${CAÑONES[seleccion.cañon].nombre} · ${ACABADOS[seleccion.acabado].nombre}`;
+    tipoArmaEl.textContent = `${stats.clasificacion} · ${CAÑONES[seleccion.cañon].nombre}`;
 
     // peso del arma armada (solo esta, no el inventario completo)
     const pesoArma = CATEGORIAS.reduce(
@@ -214,6 +214,38 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
           <div class="pista"><div class="lleno" style="width:${pct}%"></div>${fantasmaHtml}</div>
         </div>`;
     }
+    /* Estadísticas DERIVADAS: las que de verdad dicen si un arma es
+       mejor que otra. Comparar "daño 12" contra "daño 40" no dice
+       nada si una dispara diez veces por segundo y la otra una —
+       estas cifras responden eso directamente.                    */
+    html += '<div class="encabezado-col secundario">Rendimiento</div>';
+    const derivadas = [
+      ['DPS', stats.dps, ''],
+      ['DPS sostenido', stats.dpsSostenido, ''],
+      ['Tiros para abatir', stats.disparosParaAbatir, ''],
+      ['Tiempo de abatido', stats.tiempoParaAbatir, 's'],
+      ['Alcance efectivo', stats.alcanceEfectivo, 'm'],
+    ];
+    for (const [etiqueta, valor, unidad] of derivadas) {
+      html += `
+        <div class="fila-derivada">
+          <span class="nombre">${etiqueta}</span>
+          <span class="valor">${valor}${unidad}</span>
+        </div>`;
+    }
+
+    // movilidad y control como barras, son de 0 a 1
+    for (const [etiqueta, valor] of [['Movilidad', stats.movilidad], ['Control', stats.control]]) {
+      html += `
+        <div class="stat-barra">
+          <div class="fila">
+            <span class="nombre">${etiqueta}</span>
+            <span class="valor">${Math.round(valor * 100)}%</span>
+          </div>
+          <div class="pista"><div class="lleno" style="width:${valor * 100}%"></div></div>
+        </div>`;
+    }
+
     statsEl.innerHTML = html;
 
     // el arma tendida sobre la mesa, en el mundo real — misma
