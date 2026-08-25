@@ -20,7 +20,7 @@
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
 import {
-  perfilExtruido, torneado, cajaBiselada,
+  perfilExtruido, torneado, cajaBiselada, perfilSilenciador,
   siluetaReceptor, siluetaEmpuñadura, perfilCañon,
   texturaAgarre as texturaAgarreDiseno,
 } from './disenoArmas.js';
@@ -635,7 +635,7 @@ const FABRICAS_CAÑON = { corto: cañonCorto, estandar: cañonEstandar, largo: c
 function cargadorPequeño() {
   const grupo = new THREE.Group();
   const alto = 0.062;
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.032, alto, 0.045), MAT_METAL);
+  const cuerpo = cajaBiselada(0.032, alto, 0.045, MAT_METAL, 0.003);
   cuerpo.position.y = -alto / 2;
   grupo.add(cuerpo);
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.008, 0.05), MAT_METAL_CLARO);
@@ -647,7 +647,7 @@ function cargadorPequeño() {
 function cargadorMedio() {
   const grupo = new THREE.Group();
   const alto = 0.11;
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.032, alto, 0.045), MAT_METAL);
+  const cuerpo = cajaBiselada(0.032, alto, 0.045, MAT_METAL, 0.0035);
   cuerpo.position.y = -alto / 2;
   grupo.add(cuerpo);
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.009, 0.05), MAT_METAL_CLARO);
@@ -657,17 +657,23 @@ function cargadorMedio() {
 }
 
 function cargadorGrande() {
-  // ligera inclinación hacia adelante — sugiere cargador "banana"
-  // sin necesitar geometría curva de verdad
+  /* Curva de "banana" REAL, no solo una caja inclinada: la
+     silueta se dobla hacia adelante conforme baja, como un
+     cargador curvo de verdad — usando la misma técnica de perfil
+     extruido que los cuerpos, solo que en el plano X (a lo ancho)
+     en vez de Z.                                                */
   const grupo = new THREE.Group();
   const alto = 0.175;
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.032, alto, 0.045), MAT_METAL);
-  cuerpo.position.y = -alto / 2;
+  const cuerpo = perfilExtruido(
+    [[0, 0.016], [0.006, -alto * 0.4], [0.018, -alto * 0.75], [0.03, -alto],
+     [0.022, -alto], [0.012, -alto * 0.73], [0.001, -alto * 0.4], [-0.006, 0]],
+    0.045, MAT_METAL, { bisel: 0.003 }
+  );
+  cuerpo.rotation.y = Math.PI / 2;   // el perfil se dibujó en X-Y; rotar para que la curva quede en Z
   grupo.add(cuerpo);
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.052), MAT_METAL_CLARO);
-  base.position.y = -alto - 0.005;
+  base.position.set(0.026, -alto - 0.005, 0);
   grupo.add(base);
-  grupo.rotation.x = -0.09;
   return grupo;
 }
 
@@ -1040,9 +1046,19 @@ function bocaCompensador(radioPunta = 0.017) {
   const grupo = new THREE.Group();
   const longitudExtra = 0.045;
   const radio = Math.max(0.021, radioPunta + 0.001);
-  const cuerpo = new THREE.Mesh(new THREE.CylinderGeometry(radio, radio, longitudExtra, 10), MAT_METAL);
-  cuerpo.rotation.x = Math.PI / 2;
-  cuerpo.position.z = -longitudExtra / 2;
+  /* Perfil torneado en vez de cilindro recto: collar de montaje
+     donde se une al cañón, cuerpo principal, y una leve conicidad
+     hacia la punta — como un compensador mecanizado de verdad. */
+  const cuerpo = torneado([
+    [0.006, radio * 0.82],
+    [0.006, radio],
+    [-0.008, radio],
+    [-longitudExtra * 0.5, radio * 0.98],
+    [-longitudExtra + 0.006, radio * 0.9],
+    [-longitudExtra, radio * 0.72],
+    [-longitudExtra, 0],
+  ], MAT_METAL, { segmentos: 14 });
+  cuerpo.position.z = 0;
   grupo.add(cuerpo);
   return { grupo, longitudExtra };
 }
@@ -1051,10 +1067,16 @@ function bocaSilenciador(radioPunta = 0.017) {
   const grupo = new THREE.Group();
   const longitudExtra = 0.16;
   const radio = Math.max(0.024, radioPunta + 0.001);
-  const cuerpo = new THREE.Mesh(new THREE.CylinderGeometry(radio, radio, longitudExtra, 12), MAT_METAL);
-  cuerpo.rotation.x = Math.PI / 2;
-  cuerpo.position.z = -longitudExtra / 2;
+  // extremos redondeados en vez de un tubo cortado a escuadra
+  const cuerpo = torneado(perfilSilenciador(longitudExtra, radio), MAT_METAL, { segmentos: 16 });
   grupo.add(cuerpo);
+  // anillos de agarre — detalle que rompe la superficie lisa
+  for (let i = 1; i <= 3; i++) {
+    const anillo = new THREE.Mesh(new THREE.TorusGeometry(radio * 0.94, 0.0015, 6, 16), MAT_METAL_CLARO);
+    anillo.rotation.y = Math.PI / 2;
+    anillo.position.z = -longitudExtra * (i / 4);
+    grupo.add(anillo);
+  }
   return { grupo, longitudExtra };
 }
 
@@ -1208,15 +1230,32 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
 
   // el punto más "atrás" (Z más alta) de todo el modelo — el que
   // primero se arriesga a cruzar la cámara al mover el arma
+  /* El punto más "atrás" que de verdad importa es hasta donde
+     llega el GRIP — ahí está tu mano, y eso sí se ve mal si
+     atraviesa la cámara. Una culata o guardamanos que se extiendan
+     más allá NO deben contar: contra el hombro, es normal y
+     realista que queden detrás de tu cabeza al apuntar, igual que
+     en cualquier juego en primera persona. Antes esto escaneaba
+     TODA la geometría, y con las culatas nuevas del rediseño el
+     margen se disparaba hasta 0.55m — la mira dejaba de alinearse
+     con la cámara por completo, que es justo por lo que ya no se
+     veía nada al apuntar con la telescópica ni la holográfica.  */
+  const LIMITE_ZONA_GRIP = partesCuerpo.puntoEmpuñadura.z + 0.06;
   let zMasAtras = -Infinity;
   grupo.traverse((o) => {
     if (!o.isMesh) return;
     const caja = new THREE.Box3().setFromObject(o);
-    if (caja.max.z > zMasAtras) zMasAtras = caja.max.z;
+    if (caja.max.z > zMasAtras && caja.max.z <= LIMITE_ZONA_GRIP) zMasAtras = caja.max.z;
   });
+  if (zMasAtras === -Infinity) zMasAtras = LIMITE_ZONA_GRIP;
 
   const posApuntando = puntoOcular.clone().negate();
-  const MARGEN_SEGURIDAD_Z = -0.16;   // qué tan cerca de la cámara se permite el punto más atrás
+  const MARGEN_SEGURIDAD_Z = -0.03;   // qué tan cerca de la cámara se permite el punto más atrás
+  // — recalibrado: antes escaneaba TODA la geometría (hasta 0.4m de
+  // extensión real), ahora que el escaneo se limita a la zona del
+  // grip, los valores encontrados son mucho más chicos, y el margen
+  // viejo (-0.16) era excesivo para eso, rompiendo la alineación de
+  // las miras por completo.
   const zFinalPuntoMasAtras = zMasAtras + posApuntando.z;
   if (zFinalPuntoMasAtras > MARGEN_SEGURIDAD_Z) {
     // empuja el punto de apuntado más lejos (más negativo en Z) lo
