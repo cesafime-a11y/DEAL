@@ -819,7 +819,9 @@ function miraReflex(_puntaCañonLocal, huecoMira) {
   perilla.position.set(0.016, 0.014, 0.01);
   grupo.add(perilla);
 
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.042) };
+  // reflex/holográfica en la vida real tienen distancia ocular
+  // ILIMITADA (por eso son tan usados) — se puede ser generoso
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.11) };
 }
 
 function miraHolografica(_puntaCañonLocal, huecoMira) {
@@ -873,7 +875,7 @@ function miraHolografica(_puntaCañonLocal, huecoMira) {
     grupo.add(marca);
   }
 
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.05) };
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.12) };
 }
 
 function miraLaser() {
@@ -896,6 +898,80 @@ function miraLaser() {
   // no es un óptico — no hay nada que "mirar a través", se
   // comporta como apuntar sin mira
   return { grupo, puntoOcular: new THREE.Vector3(0, 0.02, 0.04) };
+}
+
+function miraPrismatica(_puntaCañonLocal, huecoMira) {
+  const grupo = new THREE.Group();
+
+  const TOPE_BASE = 0.007;
+  const profundidad = TOPE_BASE + (huecoMira ?? 0.008) + 0.005;
+  const base = cajaBiselada(0.026, profundidad, 0.03, MAT_METAL, 0.0025);
+  base.position.set(0, (TOPE_BASE - profundidad) / 2, 0.008);
+  grupo.add(base);
+
+  const ALTO_CUERPO = 0.035;
+  /* Marco hueco, no un bloque sólido: paredes laterales, techo y
+     piso, con el CENTRO abierto — un bloque macizo aquí tapaba por
+     completo el camino óptico entre el ocular de atrás y la
+     ventana de adelante (confirmado con raycasting: bloqueaba
+     100% del campo de visión, sin importar el ángulo).           */
+  for (const x of [-0.014, 0.014]) {
+    const pared = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.032, 0.058), MAT_METAL);
+    pared.position.set(x, ALTO_CUERPO, 0);
+    grupo.add(pared);
+  }
+  const techo = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.005, 0.058), MAT_METAL);
+  techo.position.set(0, ALTO_CUERPO + 0.0185, 0);
+  grupo.add(techo);
+  const piso = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.004, 0.058), MAT_METAL_CLARO);
+  piso.position.set(0, ALTO_CUERPO - 0.0185, 0);
+  grupo.add(piso);
+
+  // la ventana del prisma, angulada — el detalle que la distingue
+  // de cualquier otra mira: el "vidrio" no queda perpendicular al
+  // cañón, va inclinado, como el prisma real que hay adentro
+  const MAT_PRISMA = new THREE.MeshBasicMaterial({
+    color: 0x7fd8b0, transparent: true, opacity: 0.16, depthWrite: false,
+  });
+  const ventanaPrisma = new THREE.Mesh(new THREE.PlaneGeometry(0.024, 0.03), MAT_PRISMA);
+  ventanaPrisma.position.set(0, ALTO_CUERPO + 0.002, -0.028);
+  ventanaPrisma.rotation.x = 0.32;
+  grupo.add(ventanaPrisma);
+
+  // capuchón del ocular, sobresale un poco atrás del cuerpo
+  const ocular = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.018, 12, 1, true), MAT_TUBO);
+  ocular.rotation.x = Math.PI / 2;
+  ocular.position.set(0, ALTO_CUERPO, 0.04);
+  grupo.add(ocular);
+
+  // tapa de batería arriba — detalle chico, típico de estas miras
+  const tapaBateria = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.006, 10), MAT_METAL_CLARO);
+  tapaBateria.position.set(0, ALTO_CUERPO + 0.021, 0.015);
+  grupo.add(tapaBateria);
+  // ranuras de la tapa, para que no se vea un cilindro liso
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.0012, 0.0062, 0.0012), MAT_METAL);
+    ranura.position.set(Math.cos(a) * 0.0055, ALTO_CUERPO + 0.021, 0.015 + Math.sin(a) * 0.0055);
+    grupo.add(ranura);
+  }
+
+  // retícula grabada — cruz simple, visible al centro del ocular
+  const Z_RETICULA = 0.038;
+  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.0011, 0.02, 0.0006), MAT_RETICULA);
+  cruzV.position.set(0, ALTO_CUERPO, Z_RETICULA);
+  grupo.add(cruzV);
+  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.0011, 0.0006), MAT_RETICULA);
+  cruzH.position.set(0, ALTO_CUERPO, Z_RETICULA);
+  grupo.add(cruzH);
+  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0018, 8), MAT_PUNTO_ROJO);
+  puntoCentro.position.set(0, ALTO_CUERPO, Z_RETICULA + 0.0004);
+  grupo.add(puntoCentro);
+
+  // distancia ocular generosa — lección aprendida de las otras
+  // tres miras: con poca distancia, el borde del ocular tapa casi
+  // todo el campo de visión real al apuntar.
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.15) };
 }
 
 function miraTelescopica(_puntaCañonLocal, huecoMira) {
@@ -994,12 +1070,20 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
   grupo.add(puntoCentro);
 
   // el ojo va en el lente ocular, mirando a lo largo del tubo
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.108) };
+  /* Distancia ocular real: antes el ojo quedaba a solo 1.4cm de la
+     boca del tubo — prácticamente tocándola. Con eso, CUALQUIER
+     ángulo que no fuera el centro exacto chocaba contra el borde
+     del tubo (verificado con una rejilla de rayos cubriendo el
+     campo de visión real: 100% bloqueado). Un visor de verdad
+     tiene 6-10cm de distancia ocular — con eso el ojo queda lo
+     bastante lejos como para que el borde del tubo no estorbe.  */
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.17) };
 }
 
 const FABRICAS_MIRA = {
   ninguna: miraNinguna, hierro: miraHierro, reflex: miraReflex,
   holografica: miraHolografica, laser: miraLaser, telescopica: miraTelescopica,
+  prismatica: miraPrismatica,
 };
 
 /* ── bocas de cañón — se montan en la PUNTA real del cañón       ─
@@ -1084,9 +1168,13 @@ function bocaCompensadorPesado(radioPunta = 0.017) {
   const grupo = new THREE.Group();
   const longitudExtra = 0.07;
   const radio = Math.max(0.026, radioPunta + 0.001);
-  const cuerpo = new THREE.Mesh(new THREE.CylinderGeometry(radio, radio, longitudExtra, 10), MAT_METAL_CLARO);
-  cuerpo.rotation.x = Math.PI / 2;
-  cuerpo.position.z = -longitudExtra / 2;
+  // torneado, con un collar de montaje más ancho donde se une al
+  // cañón — antes era un cilindro recto sin ninguna transición
+  const cuerpo = torneado([
+    [0.006, radio * 0.78], [0.006, radio * 1.08], [-0.006, radio * 1.08],
+    [-0.01, radio], [-longitudExtra + 0.006, radio * 0.97],
+    [-longitudExtra, radio * 0.8], [-longitudExtra, 0],
+  ], MAT_METAL_CLARO, { segmentos: 12 });
   grupo.add(cuerpo);
 
   // ranuras de gas — dos filas de cortes, lo que más distingue
@@ -1103,10 +1191,36 @@ function bocaCompensadorPesado(radioPunta = 0.017) {
   return { grupo, longitudExtra };
 }
 
+/* Freno ranurado: perfil torneado con dos filas de ranuras
+   LARGAS a los costados (no cortes chicos como el compensador
+   pesado) — más parecido a un freno de competición real, con la
+   silueta abierta a los lados en vez de perforaciones redondas. */
+function bocaFrenoRanurado(radioPunta = 0.017) {
+  const grupo = new THREE.Group();
+  const longitudExtra = 0.06;
+  const radio = Math.max(0.022, radioPunta + 0.001);
+  const cuerpo = torneado([
+    [0.006, radio * 0.85], [0.006, radio], [-0.01, radio],
+    [-longitudExtra + 0.008, radio * 0.96], [-longitudExtra, radio * 0.7], [-longitudExtra, 0],
+  ], MAT_METAL, { segmentos: 14 });
+  grupo.add(cuerpo);
+
+  // dos ranuras largas a cada lado, no perforaciones redondas —
+  // es lo que lo distingue de un vistazo del compensador pesado
+  for (const lado of [-1, 1]) {
+    for (const zCentro of [-0.018, -0.04]) {
+      const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.009, 0.02), MAT_LENTE_OSCURA);
+      ranura.position.set(lado * (radio * 0.7), 0, zCentro);
+      grupo.add(ranura);
+    }
+  }
+  return { grupo, longitudExtra };
+}
+
 const FABRICAS_BOCA = {
   ninguna: bocaNinguna, rompellamas: bocaRompellamas,
   compensador: bocaCompensador, silenciador: bocaSilenciador,
-  compensadorPesado: bocaCompensadorPesado,
+  compensadorPesado: bocaCompensadorPesado, frenoRanurado: bocaFrenoRanurado,
 };
 
 /* ── empuñaduras inferiores — se montan bajo el cañón,          ─
@@ -1119,15 +1233,16 @@ function empuñaduraNinguna() {
 
 function empuñaduraVertical() {
   const grupo = new THREE.Group();
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.06, 0.03), MAT_GRIP);
+  const cuerpo = cajaBiselada(0.028, 0.06, 0.03, MAT_GRIP, 0.004);
   cuerpo.position.y = -0.03;
   grupo.add(cuerpo);
+  texturaAgarreDiseno(grupo, { x:0, y:-0.03, z:0, ancho:0.024, alto:0.05, filas:5, columnas:3 });
   return grupo;
 }
 
 function empuñaduraAngulada() {
   const grupo = new THREE.Group();
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.05, 0.032), MAT_GRIP);
+  const cuerpo = cajaBiselada(0.026, 0.05, 0.032, MAT_GRIP, 0.0035);
   cuerpo.position.y = -0.024;
   cuerpo.rotation.x = 0.5;   // angulada hacia adelante — perfil distinto a la vertical
   grupo.add(cuerpo);
@@ -1136,7 +1251,7 @@ function empuñaduraAngulada() {
 
 function empuñaduraBipode() {
   const grupo = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.014, 0.03), MAT_METAL);
+  const base = cajaBiselada(0.024, 0.014, 0.03, MAT_METAL, 0.002);
   grupo.add(base);
   // dos patas plegables en ángulo — lo que más distingue al bípode
   // de cualquier otra empuñadura
@@ -1152,9 +1267,22 @@ function empuñaduraBipode() {
   return grupo;
 }
 
+/* Tope de mano: mucho más corto que una empuñadura vertical, sin
+   forma de sostener toda la mano — solo un tope contra el que
+   apoyar la palma, con textura de agarre en el frente.          */
+function empuñaduraTopeMano() {
+  const grupo = new THREE.Group();
+  const cuerpo = cajaBiselada(0.03, 0.024, 0.026, MAT_GRIP, 0.004);
+  cuerpo.position.y = -0.012;
+  grupo.add(cuerpo);
+  texturaAgarreDiseno(grupo, { x: 0, y: -0.012, z: 0.011, ancho: 0.024, alto: 0.018, filas: 3, columnas: 3 });
+  return grupo;
+}
+
 const FABRICAS_EMPUÑADURA = {
   ninguna: empuñaduraNinguna, vertical: empuñaduraVertical,
   angulada: empuñaduraAngulada, bipode: empuñaduraBipode,
+  topeMano: empuñaduraTopeMano,
 };
 
 /* ── ensamblado final ─────────────────────────────────────────
