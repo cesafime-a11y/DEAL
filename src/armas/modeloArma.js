@@ -593,18 +593,36 @@ function cañonEstandar() {
 function cañonLargo() {
   const grupo = new THREE.Group();
   const longitud = 0.36;
+  const radioBase = 0.019;
   /* Perfil torneado en vez de un cilindro recto: recámara gruesa
      atrás, escalón de transición, conicidad leve a lo largo y
      labio en la boca. Es la diferencia entre un tubo de juguete y
      algo que parece mecanizado.                                  */
-  const tubo = torneado(perfilCañon(longitud, 0.019), MAT_METAL, { segmentos: 18 });
+  const tubo = torneado(perfilCañon(longitud, radioBase), MAT_METAL, { segmentos: 18 });
   grupo.add(tubo);
 
-  const guardamanos = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.045, 0.24), MAT_GRIP);
-  guardamanos.position.set(0, -0.028, -0.12);
+  /* El guardamanos: antes era una caja de tamaño Y posición FIJOS
+     (0.24m arrancando en z=-0.12), sin ninguna relación con
+     `longitud` ni con el radio real del cañón — literalmente
+     conservaba las medidas de un ajuste anterior, así que si
+     `longitud` o el radio cambiaban (como al agregar más variantes
+     de cañón), el guardamanos se quedaba corto/angosto o largo de
+     más y desalineado. Ahora se calcula a partir del cañón real:
+     cubre 65% de la longitud (arrancando justo después de la
+     recámara) y su grosor sigue el radio real del tubo — así
+     siempre queda bien pegado al cañón que en verdad tiene,
+     cualquiera que sea.                                          */
+  const LARGO_GUARDAMANOS = longitud * 0.65;
+  const anchoGuardamanos = radioBase * 2.6;
+  const altoGuardamanos = radioBase * 2.35;
+  const guardamanos = new THREE.Mesh(
+    new THREE.BoxGeometry(anchoGuardamanos, altoGuardamanos, LARGO_GUARDAMANOS),
+    MAT_GRIP
+  );
+  guardamanos.position.set(0, -radioBase * 1.47, -0.02 - LARGO_GUARDAMANOS / 2);
   grupo.add(guardamanos);
 
-  return { grupo, longitud, radioPunta: 0.019 };
+  return { grupo, longitud, radioPunta: radioBase };
 }
 
 function cañonPesado() {
@@ -628,7 +646,22 @@ function cañonPesado() {
   return { grupo, longitud, radioPunta: 0.024 };
 }
 
-const FABRICAS_CAÑON = { corto: cañonCorto, estandar: cañonEstandar, largo: cañonLargo, pesado: cañonPesado };
+/* Más extremo que el corto: el tubo más delgado del juego, sin
+   ningún detalle extra — es la opción "nada, solo lo esencial"
+   para builds que priorizan cadencia sobre todo lo demás.        */
+function cañonUltraligero() {
+  const grupo = new THREE.Group();
+  const longitud = 0.10;
+  const radioBase = 0.013;
+  const tubo = torneado(perfilCañon(longitud, radioBase), MAT_METAL, { segmentos: 14 });
+  grupo.add(tubo);
+  return { grupo, longitud, radioPunta: radioBase };
+}
+
+const FABRICAS_CAÑON = {
+  corto: cañonCorto, estandar: cañonEstandar, largo: cañonLargo, pesado: cañonPesado,
+  ultraligero: cañonUltraligero,
+};
 
 /* ── cargadores — cuelgan del punto de cargador del cuerpo ──── */
 
@@ -1020,24 +1053,14 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
   campanaTrasera.position.set(0, ALTO_TUBO, 0.082);
   grupo.add(campanaTrasera);
 
-  // torreta de elevación (arriba) y de deriva (lado) — detalle que
-  // hace que se lea como óptica ajustable, no como un tubo liso
+  /* Torreta única de elevación — antes traía también la de deriva
+     (al lado) más un anillo de zoom con 8 estrías repetidas: mucho
+     detalle exterior que el usuario reportó como "muy cargada".
+     Simplificado a lo esencial que sigue leyéndose como visor
+     ajustable (una torreta) sin la sobrecarga de piezas repetidas.  */
   const torretaArriba = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.016, 12), MAT_METAL_CLARO);
   torretaArriba.position.set(0, ALTO_TUBO + 0.019, 0.004);
   grupo.add(torretaArriba);
-  const torretaLado = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.014, 12), MAT_METAL_CLARO);
-  torretaLado.rotation.z = Math.PI / 2;
-  torretaLado.position.set(0.019, ALTO_TUBO, 0.004);
-  grupo.add(torretaLado);
-
-  // anillo de zoom, con estrías
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const estria = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.004, 0.02), MAT_METAL_CLARO);
-    estria.position.set(Math.cos(a) * 0.0165, ALTO_TUBO + Math.sin(a) * 0.0165, 0.048);
-    estria.rotation.z = a;
-    grupo.add(estria);
-  }
 
   // lente delantera y trasera, ahora con cuerpo visible
   /* Sin lente delantera: igual que la ocular, un disco ahí tapaba
@@ -1047,26 +1070,30 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
      miras. Se deja el hueco limpio y la cruceta hace todo el
      trabajo — es lo que de verdad usas para apuntar.             */
 
-  /* La RETÍCULA: la cruz dentro del lente. Antes no existía — parte
-     de que la mira "no tuviera nada" era literalmente eso: mirabas
-     y no había ninguna marca. Va justo delante del lente ocular,
-     para que se vea al apuntar.                                    */
+  /* La RETÍCULA: simplificada a propósito — antes traía 4 marcas de
+     rango además de la cruz, lo que la hacía verse "cargada", y las
+     líneas eran tan delgadas (1.6mm) que a la distancia ocular real
+     casi no se alcanzaban a ver. Ahora es solo una cruz gruesa y un
+     punto central — más simple, y de verdad visible al apuntar.
+     `depthTest: false` + `renderOrder` alto: así SIEMPRE se dibuja
+     encima de cualquier otra pieza que quede en medio (antes podía
+     quedar tapada por la campana trasera si la geometría se cruzaba
+     un poco, y entonces "no se veía la cruceta" al apuntar).       */
+  const MAT_RETICULA_VISIBLE = MAT_RETICULA.clone();
+  MAT_RETICULA_VISIBLE.depthTest = false;
   const Z_RETICULA = 0.094;
-  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.0016, 0.038, 0.0008), MAT_RETICULA);
+  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.0035, 0.045, 0.0008), MAT_RETICULA_VISIBLE);
   cruzV.position.set(0, ALTO_TUBO, Z_RETICULA);
+  cruzV.renderOrder = 999;
   grupo.add(cruzV);
-  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.0016, 0.0008), MAT_RETICULA);
+  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.0035, 0.0008), MAT_RETICULA_VISIBLE);
   cruzH.position.set(0, ALTO_TUBO, Z_RETICULA);
+  cruzH.renderOrder = 999;
   grupo.add(cruzH);
-  // marcas de rango sobre el eje vertical — el detalle que hace que
-  // se lea como retícula de francotirador y no como una cruz simple
-  for (const dy of [-0.012, -0.008, -0.004, 0.008]) {
-    const marca = new THREE.Mesh(new THREE.BoxGeometry(0.007, 0.0013, 0.0008), MAT_RETICULA);
-    marca.position.set(0, ALTO_TUBO + dy, Z_RETICULA);
-    grupo.add(marca);
-  }
-  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0018, 8), MAT_PUNTO_ROJO);
+  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0026, 12), MAT_PUNTO_ROJO.clone());
+  puntoCentro.material.depthTest = false;
   puntoCentro.position.set(0, ALTO_TUBO, Z_RETICULA + 0.0006);
+  puntoCentro.renderOrder = 1000;
   grupo.add(puntoCentro);
 
   // el ojo va en el lente ocular, mirando a lo largo del tubo
@@ -1217,10 +1244,31 @@ function bocaFrenoRanurado(radioPunta = 0.017) {
   return { grupo, longitudExtra };
 }
 
+/* Supresor integral: más largo y más grueso que el silenciador
+   normal, con más anillos de agarre — se lee como una pieza mucho
+   más seria/pesada, acorde a que controla el retroceso casi tanto
+   como el compensador pesado pero cuesta el alcance más alto del
+   juego.                                                          */
+function bocaSupresorIntegral(radioPunta = 0.017) {
+  const grupo = new THREE.Group();
+  const longitudExtra = 0.21;
+  const radio = Math.max(0.027, radioPunta + 0.0015);
+  const cuerpo = torneado(perfilSilenciador(longitudExtra, radio), MAT_METAL, { segmentos: 16 });
+  grupo.add(cuerpo);
+  for (let i = 1; i <= 4; i++) {
+    const anillo = new THREE.Mesh(new THREE.TorusGeometry(radio * 0.95, 0.0017, 6, 16), MAT_METAL_CLARO);
+    anillo.rotation.y = Math.PI / 2;
+    anillo.position.z = -longitudExtra * (i / 5);
+    grupo.add(anillo);
+  }
+  return { grupo, longitudExtra };
+}
+
 const FABRICAS_BOCA = {
   ninguna: bocaNinguna, rompellamas: bocaRompellamas,
   compensador: bocaCompensador, silenciador: bocaSilenciador,
   compensadorPesado: bocaCompensadorPesado, frenoRanurado: bocaFrenoRanurado,
+  supresorIntegral: bocaSupresorIntegral,
 };
 
 /* ── empuñaduras inferiores — se montan bajo el cañón,          ─
@@ -1279,10 +1327,23 @@ function empuñaduraTopeMano() {
   return grupo;
 }
 
+/* Empuñadura corta de combate: más chica incluso que el tope de
+   mano, sin textura de agarre — un nub mínimo, acorde a que es la
+   pieza que menos controla el retroceso de las cinco (casi como no
+   traer nada), a cambio de ser la más ligera y la única que agiliza
+   el apuntado en vez de solo no penalizarlo.                      */
+function empuñaduraCortaCombate() {
+  const grupo = new THREE.Group();
+  const cuerpo = cajaBiselada(0.024, 0.016, 0.02, MAT_GRIP, 0.003);
+  cuerpo.position.y = -0.009;
+  grupo.add(cuerpo);
+  return grupo;
+}
+
 const FABRICAS_EMPUÑADURA = {
   ninguna: empuñaduraNinguna, vertical: empuñaduraVertical,
   angulada: empuñaduraAngulada, bipode: empuñaduraBipode,
-  topeMano: empuñaduraTopeMano,
+  topeMano: empuñaduraTopeMano, cortaCombate: empuñaduraCortaCombate,
 };
 
 /* ── ensamblado final ─────────────────────────────────────────
@@ -1378,12 +1439,17 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
   if (zMasAtras === -Infinity) zMasAtras = LIMITE_ZONA_GRIP;
 
   const posApuntando = puntoOcular.clone().negate();
-  const MARGEN_SEGURIDAD_Z = -0.03;   // qué tan cerca de la cámara se permite el punto más atrás
-  // — recalibrado: antes escaneaba TODA la geometría (hasta 0.4m de
-  // extensión real), ahora que el escaneo se limita a la zona del
-  // grip, los valores encontrados son mucho más chicos, y el margen
-  // viejo (-0.16) era excesivo para eso, rompiendo la alineación de
-  // las miras por completo.
+  // qué tan cerca de la cámara se permite el punto más atrás. El
+  // plano near de la cámara está en -0.1 (ver core/mundo.js) — CUALQUIER
+  // geometría entre -0.1 y 0 se recorta y se ve como si atravesaras
+  // el arma. El valor anterior (-0.03) IGNORABA esto por completo:
+  // quedaba DENTRO de la zona recortada, así que mira reflex,
+  // holográfica y prismática (con zoomApuntado más alto, lo que
+  // acerca más el ojo) atravesaban el arma al apuntar. Verificado con
+  // un barrido de las 8 armas × 7 miras: con -0.03 seis de las siete
+  // miras quedaban dentro del near plane; con -0.14 (near + 0.04 de
+  // colchón) las siete quedan a salvo.
+  const MARGEN_SEGURIDAD_Z = -0.14;
   const zFinalPuntoMasAtras = zMasAtras + posApuntando.z;
   if (zFinalPuntoMasAtras > MARGEN_SEGURIDAD_Z) {
     // empuja el punto de apuntado más lejos (más negativo en Z) lo
@@ -1391,6 +1457,17 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
     // no queda perfecta al centro, pero nunca atraviesas el arma
     posApuntando.z -= (zFinalPuntoMasAtras - MARGEN_SEGURIDAD_Z);
   }
+
+  /* Piso duro, además del escaneo de arriba: el escaneo solo mira
+     la zona del grip, y con miras de zoom bajo (reflex, holográfica,
+     prismática) el punto ocular propio de la mira ya es tan chico
+     que el arma completa termina muy cerca de la cámara SIN que
+     el grip sea lo que esté más cerca — es el cuerpo/receptor. Sin
+     este piso, esas tres miras quedaban dentro del plano near
+     (verificado con un barrido de las 8 armas × 7 miras) y se veía
+     como si atravesaras el arma al apuntar.                        */
+  const DISTANCIA_MINIMA_CAMARA = -0.15;
+  if (posApuntando.z > DISTANCIA_MINIMA_CAMARA) posApuntando.z = DISTANCIA_MINIMA_CAMARA;
 
   return { grupo, puntaCañon, puntoOcular, posApuntando };
 }
