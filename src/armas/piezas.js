@@ -130,6 +130,17 @@ export const CAÑONES = {
     modPrecision: 0.05,
     modCadencia: -1.3,     // el que más castiga la cadencia
   },
+  // más extremo que el corto: el más ligero y rápido del juego,
+  // pero también el de menor daño y alcance — la opción para
+  // quien construye alrededor de la cadencia, no del alcance
+  ultraligero: {
+    nombre: 'Cañón ultraligero',
+    peso: 0.08,
+    daño: 12,
+    alcance: 16,
+    modPrecision: -0.14,
+    modCadencia: 0.8,
+  },
 };
 
 export const CARGADORES = {
@@ -180,6 +191,10 @@ export const BOCAS = {
   // pesada, así que sí cuesta algo (afecta el peso total del
   // inventario, no una estadística directa del arma)
   compensadorPesado: { nombre: 'Compensador pesado', peso: 0.26, modRetroceso: -0.3, modDaño: 0, modAlcance: 0 },
+  // el supresor más pesado y con más baffles que el silenciador —
+  // controla el retroceso casi tan bien como el compensador pesado,
+  // pero cuesta más alcance que cualquier otra boca del juego
+  supresorIntegral: { nombre: 'Supresor integral', peso: 0.5, modRetroceso: -0.28, modDaño: -2, modAlcance: -9 },
 };
 
 export const EMPUÑADURAS = {
@@ -194,6 +209,11 @@ export const EMPUÑADURAS = {
   // el mejor control de retroceso y algo de precisión, pero el
   // peso tiene costo real: apuntar se vuelve notablemente más lento
   bipode: { nombre: 'Bípode', peso: 0.45, modRetroceso: -0.16, modCadencia: 0, modPrecision: 0.04, modVelocidadApuntado: 0.65 },
+  // el extremo opuesto al bípode: prácticamente no controla
+  // retroceso, pero es la más ligera de todas y la única que hace
+  // el apuntado MÁS rápido que sin empuñadura — para builds que
+  // priorizan la movilidad por encima de todo
+  cortaCombate: { nombre: 'Empuñadura corta de combate', peso: 0.03, modRetroceso: -0.01, modCadencia: 0.2, modPrecision: 0, modVelocidadApuntado: 1.08 },
 };
 
 export const GATILLOS = {
@@ -221,6 +241,8 @@ export const ACABADOS = {
   pulido: { nombre: 'Pulido', peso: 0, modPrecision: 0, color: 0x8a8f96 },
   artesanal: { nombre: 'Artesanal', peso: 0, modPrecision: -0.03, color: 0x6b3a28 },
   envejecido: { nombre: 'Envejecido', peso: 0, modPrecision: 0, color: 0x4a4642 },
+  digital: { nombre: 'Camuflaje digital', peso: 0, modPrecision: 0, color: 0x4d5245 },
+  cromado: { nombre: 'Cromado espejo', peso: 0, modPrecision: 0, color: 0xc8ccd0 },
 };
 
 /* No toda pieza cabe en toda arma — armas de mano (pistola,
