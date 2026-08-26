@@ -234,18 +234,22 @@ describe('ensamblarArma — categorías nuevas (opcionales)', () => {
 
 describe('catálogo de piezas', () => {
   it('el conteo de las 4 categorías nuevas es el acordado', () => {
-    expect(Object.keys(EMPUÑADURAS)).toHaveLength(5);
+    // +1: cortaCombate (empuñadura corta de combate)
+    expect(Object.keys(EMPUÑADURAS)).toHaveLength(6);
     expect(Object.keys(GATILLOS)).toHaveLength(3);
     expect(Object.keys(MUNICIONES)).toHaveLength(4);
-    expect(Object.keys(ACABADOS)).toHaveLength(6);
+    // +2: digital y cromado
+    expect(Object.keys(ACABADOS)).toHaveLength(8);
   });
 
   it('el conteo de las categorías existentes creció como se acordó', () => {
     expect(Object.keys(CUERPOS)).toHaveLength(8);
-    expect(Object.keys(CAÑONES)).toHaveLength(4);
+    // +1: ultraligero
+    expect(Object.keys(CAÑONES)).toHaveLength(5);
     expect(Object.keys(CARGADORES)).toHaveLength(4);
     expect(Object.keys(MIRAS)).toHaveLength(7);
-    expect(Object.keys(BOCAS)).toHaveLength(6);
+    // +1: supresorIntegral
+    expect(Object.keys(BOCAS)).toHaveLength(7);
   });
 
   it('todas las bocas de cañón tienen los campos que ensamblar() necesita', () => {
