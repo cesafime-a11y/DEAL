@@ -853,8 +853,13 @@ function miraReflex(_puntaCañonLocal, huecoMira) {
   grupo.add(perilla);
 
   // reflex/holográfica en la vida real tienen distancia ocular
-  // ILIMITADA (por eso son tan usados) — se puede ser generoso
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.11) };
+  // ILIMITADA (por eso son tan usados) — pero en el juego la
+  // cámara tiene un plano near a 10cm: con menos de esa distancia
+  // (más un colchón) la propia carcasa de la mira se recorta y se
+  // ve como si la atravesaras. Medido: la base de esta mira llega
+  // hasta z=0.025 local, así que con 0.11 solo había 8.5cm de
+  // verdad libres — no alcanzaba. 0.15 deja ~12.5cm reales.
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.15) };
 }
 
 function miraHolografica(_puntaCañonLocal, huecoMira) {
@@ -908,7 +913,11 @@ function miraHolografica(_puntaCañonLocal, huecoMira) {
     grupo.add(marca);
   }
 
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.12) };
+  // igual que en la reflex: el bloque de electrónica llega hasta
+  // z=0.035 local, así que 0.12 solo dejaba 8.5cm reales de
+  // distancia ocular — menos de los 10cm+colchón que necesita la
+  // cámara. Con 0.16 quedan ~12.5cm reales.
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.16) };
 }
 
 function miraLaser() {
@@ -1001,10 +1010,11 @@ function miraPrismatica(_puntaCañonLocal, huecoMira) {
   puntoCentro.position.set(0, ALTO_CUERPO, Z_RETICULA + 0.0004);
   grupo.add(puntoCentro);
 
-  // distancia ocular generosa — lección aprendida de las otras
-  // tres miras: con poca distancia, el borde del ocular tapa casi
-  // todo el campo de visión real al apuntar.
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.15) };
+  // distancia ocular generosa — pero el capuchón del ocular llega
+  // hasta z=0.049 local, así que con 0.15 solo quedaban 10.1cm
+  // reales, un poco corto contra el plano near de la cámara
+  // (10cm+colchón). Con 0.18 quedan ~13cm reales.
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.18) };
 }
 
 function miraTelescopica(_puntaCañonLocal, huecoMira) {
@@ -1103,8 +1113,13 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
      del tubo (verificado con una rejilla de rayos cubriendo el
      campo de visión real: 100% bloqueado). Un visor de verdad
      tiene 6-10cm de distancia ocular — con eso el ojo queda lo
-     bastante lejos como para que el borde del tubo no estorbe.  */
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.17) };
+     bastante lejos como para que el borde del tubo no estorbe.
+     Pero 0.17 solo daba 7cm reales libres respecto al borde de la
+     campana trasera (que llega hasta z=0.1 local) — menos que el
+     plano near de la cámara (10cm) más colchón, así que la propia
+     campana se recortaba y se veía como un anillo gigante y
+     deformado llenando la pantalla. Con 0.23 quedan ~13cm reales.*/
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.23) };
 }
 
 const FABRICAS_MIRA = {
@@ -1417,18 +1432,15 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
   // quedar DETRÁS de la cámara, viéndose como si la atravesaras.
   const puntoOcular = partesCuerpo.puntoMira.clone().add(partesMira.puntoOcular);
 
-  // el punto más "atrás" (Z más alta) de todo el modelo — el que
-  // primero se arriesga a cruzar la cámara al mover el arma
-  /* El punto más "atrás" que de verdad importa es hasta donde
-     llega el GRIP — ahí está tu mano, y eso sí se ve mal si
-     atraviesa la cámara. Una culata o guardamanos que se extiendan
-     más allá NO deben contar: contra el hombro, es normal y
-     realista que queden detrás de tu cabeza al apuntar, igual que
-     en cualquier juego en primera persona. Antes esto escaneaba
-     TODA la geometría, y con las culatas nuevas del rediseño el
-     margen se disparaba hasta 0.55m — la mira dejaba de alinearse
-     con la cámara por completo, que es justo por lo que ya no se
-     veía nada al apuntar con la telescópica ni la holográfica.  */
+  /* Qué tan cerca de la cámara se puede dejar la geometría del
+     GRIP (tu mano) sin que se vea mal — una culata que se extienda
+     más allá NO cuenta, es normal que quede detrás de tu cabeza al
+     apuntar, como en cualquier shooter en primera persona.
+     Nota: esto NO resuelve el problema de que una mira concreta
+     (su propio tubo/carcasa) quede pegada a su propio punto
+     ocular — eso se corrige en cada función de mira, ajustando su
+     `puntoOcular` con suficiente distancia real (ver miraReflex,
+     miraHolografica, miraPrismatica y miraTelescopica).            */
   const LIMITE_ZONA_GRIP = partesCuerpo.puntoEmpuñadura.z + 0.06;
   let zMasAtras = -Infinity;
   grupo.traverse((o) => {
@@ -1439,35 +1451,11 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
   if (zMasAtras === -Infinity) zMasAtras = LIMITE_ZONA_GRIP;
 
   const posApuntando = puntoOcular.clone().negate();
-  // qué tan cerca de la cámara se permite el punto más atrás. El
-  // plano near de la cámara está en -0.1 (ver core/mundo.js) — CUALQUIER
-  // geometría entre -0.1 y 0 se recorta y se ve como si atravesaras
-  // el arma. El valor anterior (-0.03) IGNORABA esto por completo:
-  // quedaba DENTRO de la zona recortada, así que mira reflex,
-  // holográfica y prismática (con zoomApuntado más alto, lo que
-  // acerca más el ojo) atravesaban el arma al apuntar. Verificado con
-  // un barrido de las 8 armas × 7 miras: con -0.03 seis de las siete
-  // miras quedaban dentro del near plane; con -0.14 (near + 0.04 de
-  // colchón) las siete quedan a salvo.
-  const MARGEN_SEGURIDAD_Z = -0.14;
+  const MARGEN_SEGURIDAD_Z = -0.03;
   const zFinalPuntoMasAtras = zMasAtras + posApuntando.z;
   if (zFinalPuntoMasAtras > MARGEN_SEGURIDAD_Z) {
-    // empuja el punto de apuntado más lejos (más negativo en Z) lo
-    // justo para que el punto más atrás quede a salvo — la mira ya
-    // no queda perfecta al centro, pero nunca atraviesas el arma
     posApuntando.z -= (zFinalPuntoMasAtras - MARGEN_SEGURIDAD_Z);
   }
-
-  /* Piso duro, además del escaneo de arriba: el escaneo solo mira
-     la zona del grip, y con miras de zoom bajo (reflex, holográfica,
-     prismática) el punto ocular propio de la mira ya es tan chico
-     que el arma completa termina muy cerca de la cámara SIN que
-     el grip sea lo que esté más cerca — es el cuerpo/receptor. Sin
-     este piso, esas tres miras quedaban dentro del plano near
-     (verificado con un barrido de las 8 armas × 7 miras) y se veía
-     como si atravesaras el arma al apuntar.                        */
-  const DISTANCIA_MINIMA_CAMARA = -0.15;
-  if (posApuntando.z > DISTANCIA_MINIMA_CAMARA) posApuntando.z = DISTANCIA_MINIMA_CAMARA;
 
   return { grupo, puntaCañon, puntoOcular, posApuntando };
 }
