@@ -147,10 +147,14 @@ export function crearPersonajeVisual(scene) {
   function actualizar(camera, velocidad, dt) {
     if (!grupo.visible) return;
 
-    // Pelvis aproximadamente 76 cm por debajo de los ojos.
+    // Pelvis 60cm por debajo de los ojos — con la altura de ojos
+    // real del juego (1.7m, mundo.js) y la distancia real pelvis→
+    // planta del pie de este muñeco (1.1m), es el valor que deja
+    // los pies exactamente en el piso. El valor anterior (0.76)
+    // los dejaba 16cm hundidos bajo el suelo.
     grupo.position.set(
       camera.position.x,
-      camera.position.y - 0.76,
+      camera.position.y - 0.6,
       camera.position.z
     );
 
