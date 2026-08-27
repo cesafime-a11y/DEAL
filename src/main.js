@@ -28,6 +28,7 @@ import {
 import { crearMundoFisico } from './fisica/mundoFisico.js';
 import { crearPersonajeVisual } from './personaje/personajeVisual.js';
 import { crearRagdoll } from './personaje/ragdoll.js';
+import { crearBrazosFPS } from './personaje/brazosFPS.js';
 
 const { scene, camera, renderer, sol, ALTURA_OJOS } = crearMundo();
 const efectos = crearEfectos(scene);
@@ -113,6 +114,12 @@ const seleccionInicial = {
 
 const estadisticasArma = estadisticasDeSeleccion(seleccionInicial);
 const arma = crearArma(camera, animador, estadisticasArma, seleccionInicial);
+
+// V2: brazos en primera persona montados directamente dentro del
+// mismo grupo exterior del arma. Todo lo que haga arma.js
+// (ADS, recoil, recarga, inspección, sway) mueve también los brazos.
+const brazosFPS = crearBrazosFPS(arma.grupo, seleccionInicial);
+
 const inventario = crearInventario(seleccionInicial);
 const hud = crearHud();
 
@@ -139,6 +146,7 @@ const banco = crearBancoTrabajo({
     sonidoConfirmar();
     inventario.actualizarActivo(nuevaSeleccion);
     arma.actualizarArma(nuevasEstadisticas, nuevaSeleccion);
+    brazosFPS.actualizarSeleccion(nuevaSeleccion);
   },
 });
 
@@ -240,6 +248,11 @@ document.addEventListener('keydown', (e) => {
       impulso: direccion,
       puntoImpulso: 'pecho',
     });
+
+    // Al entrar en ragdoll desaparecen los brazos FPS.
+    brazosFPS.actualizar({
+      visible: !ragdoll.activo && jugador.controls.isLocked,
+    });
   }
 });
 
@@ -254,6 +267,7 @@ document.addEventListener('keyup', (e) => {
       estadisticasDeSeleccion(seleccionActiva),
       seleccionActiva
     );
+    brazosFPS.actualizarSeleccion(seleccionActiva);
   }
 });
 
@@ -382,6 +396,17 @@ function animar() {
   // Paso físico después de actualizar la pose del frame.
   fisica.actualizar(dt);
   ragdoll.actualizar();
+
+  // Los brazos FPS solo existen durante gameplay activo.
+  // Como son hijos de arma.grupo, si el arma está vacía también
+  // desaparecen automáticamente.
+  brazosFPS.actualizar({
+    visible:
+      jugador.controls.isLocked &&
+      !banco.abierto &&
+      !ragdoll.activo &&
+      !arma.estado().sinArma,
+  });
 
   hud.actualizar(arma.estado(), inventario);
 

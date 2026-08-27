@@ -1,63 +1,94 @@
 /* ── core/mundo.js ─────────────────────────────────────────
-   El motor genérico: escena, cámara, renderer, luces base, un
-   piso grande que cubre todo el recorrido, y resize. Ya NO
-   arma ningún entorno específico — eso vive en entornos/taller.js
-   y entornos/cabina.js, que agregan su propio contenido a esta
-   misma escena compartida. El cielo vive aparte, en
-   graficos/cielo.js.
+   Motor visual base de DEAL.
+
+   V2 gráfica:
+   - sRGB correcto
+   - ACES Filmic tone mapping
+   - exposición calibrada
+   - sombras suaves con mejor precisión
+   - luz hemisférica para exteriores/interiores
+   - niebla algo más natural
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
 
 export function crearMundo() {
   const scene = new THREE.Scene();
-  // gris azulado de día nublado — no negro; el cielo real lo pone
-  // graficos/cielo.js, esto es solo respaldo por si algo no lo cubre
-  scene.background = new THREE.Color(0x8b9098);
-  scene.fog = new THREE.Fog(0x8b9098, 20, 140);
+
+  const COLOR_CIELO = 0x98a1aa;
+  scene.background = new THREE.Color(COLOR_CIELO);
+  scene.fog = new THREE.FogExp2(COLOR_CIELO, 0.0085);
 
   const camera = new THREE.PerspectiveCamera(
-    // el plano lejano se amplió: el cielo (graficos/cielo.js) es
-    // enorme (escala 4500) y con 1000 se hubiera recortado
-    75, window.innerWidth / window.innerHeight, 0.1, 6000
+    75,
+    window.innerWidth / window.innerHeight,
+    0.06,     // más cerca que antes: reduce clipping del arma/manos
+    6000
   );
-  const ALTURA_OJOS = 1.7;   // metros — altura de cámara al caminar
-  // arranca DENTRO del taller, mirando hacia la puerta (el taller
-  // vive cerca del origen — ver entornos/taller.js)
+
+  const ALTURA_OJOS = 1.7;
   camera.position.set(0, ALTURA_OJOS, 10);
-  // la cámara tiene que ser parte de la escena para que lo que se
-  // le cuelgue encima (el arma) también se dibuje
   scene.add(camera);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: 'high-performance',
+  });
+
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+
+  // Pipeline de color moderno. Esto evita el aspecto lavado/gris
+  // de materiales PBR mostrados sin conversión sRGB.
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   document.body.prepend(renderer.domElement);
 
-  /* luces — de día nublado: ambiente brillante y neutro, sol
-     suave y frío. El taller bloquea esta luz con su techo y usa
-     sus propias lámparas interiores (ver entornos/taller.js).  */
-  scene.add(new THREE.AmbientLight(0x9aa0a8, 1.5));
-  const sol = new THREE.DirectionalLight(0xd8dee4, 1.25);
-  sol.position.set(12, 22, 8);   // graficos/cielo.js la reacomoda para que combine con el sol del cielo
+  /* Iluminación global.
+     Ambient se mantiene moderada para no aplastar el contraste.
+     Hemisphere da rebote frío del cielo y cálido del suelo. */
+  const ambient = new THREE.AmbientLight(0xb7bec7, 0.72);
+  scene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(
+    0xc8d7e5,
+    0x4a4338,
+    1.15
+  );
+  scene.add(hemi);
+
+  const sol = new THREE.DirectionalLight(0xe7edf5, 2.0);
+  sol.position.set(12, 22, 8);
   sol.castShadow = true;
-  sol.shadow.mapSize.set(2048, 2048);
-  // sombra ampliada para cubrir taller + corredor + cabina, que
-  // ahora están repartidos en un tramo largo del mapa
-  // sombra ajustada al tamaño real del edificio — ya no hay un
-  // tramo largo al aire libre, todo cabe en una zona más chica
-  sol.shadow.camera.left = -40; sol.shadow.camera.right = 40;
-  sol.shadow.camera.top = 40; sol.shadow.camera.bottom = -40;
+
+  sol.shadow.mapSize.set(4096, 4096);
+  sol.shadow.camera.left = -38;
+  sol.shadow.camera.right = 38;
+  sol.shadow.camera.top = 38;
+  sol.shadow.camera.bottom = -38;
+  sol.shadow.camera.near = 1;
+  sol.shadow.camera.far = 130;
+
+  // Ayuda con acne/peter-panning sin despegar demasiado las sombras.
+  sol.shadow.bias = -0.00025;
+  sol.shadow.normalBias = 0.025;
+
   scene.add(sol);
 
-  /* piso general — cubre el edificio (taller + cabina, ahora un
-     solo cuarto largo) más algo de exterior alrededor de la
-     entrada; cada cuarto pone su propio piso encima por dentro. */
+  /* Piso general */
   const suelo = new THREE.Mesh(
     new THREE.PlaneGeometry(70, 90),
-    new THREE.MeshStandardMaterial({ color: 0x5a5648, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({
+      color: 0x5a5648,
+      roughness: 0.92,
+      metalness: 0.0,
+    })
   );
+
   suelo.rotation.x = -Math.PI / 2;
   suelo.position.set(0, 0, 20);
   suelo.receiveShadow = true;
@@ -66,22 +97,38 @@ export function crearMundo() {
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
   });
 
-  return { scene, camera, renderer, sol, ALTURA_OJOS };
+  return {
+    scene,
+    camera,
+    renderer,
+    sol,
+    ambient,
+    hemi,
+    ALTURA_OJOS,
+  };
 }
 
-/* Tiñe brevemente de rojo el objeto golpeado, como confirmación
-   visual de que el disparo sí conectó — nada elaborado todavía. */
+/* Se conserva por compatibilidad con código viejo. */
 const _colorImpacto = new THREE.Color(0xff3b3b);
+
 export function marcarImpacto(mesh) {
   if (!mesh.material || mesh.userData.flasheando) return;
+
   mesh.userData.flasheando = true;
   const colorOriginal = mesh.material.color.clone();
+
   mesh.material.color.copy(_colorImpacto);
+
   setTimeout(() => {
-    mesh.material.color.copy(colorOriginal);
+    if (mesh.material?.color) {
+      mesh.material.color.copy(colorOriginal);
+    }
     mesh.userData.flasheando = false;
   }, 110);
 }
+

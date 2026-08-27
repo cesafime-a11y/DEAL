@@ -1,215 +1,263 @@
+/* ── personaje/personajeVisual.js ───────────────────────────
+   PERSONAJE V2
+
+   Este es el CUERPO DEL MUNDO, NO los brazos en primera persona.
+
+   Durante gameplay normal:
+   - se ven pelvis + piernas + pies al mirar hacia abajo
+   - cabeza, pecho y brazos superiores NO se renderizan al jugador
+     local, evitando meterse dentro del torso o tapar el arma
+
+   Para ragdoll:
+   - TODAS las piezas siguen existiendo internamente
+   - obtenerPartesRagdoll() entrega el cuerpo completo
+   - ragdoll.js puede crear cabeza/torso/brazos aunque aquí estén
+     ocultos durante la vista FPS
+──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
-
-/*
-  Representación visual del jugador en el mundo.
-
-  IMPORTANTE:
-  - No controla movimiento.
-  - No controla cámara.
-  - No sabe nada del arma.
-  - Solamente sigue a la cámara cuando está en modo animado.
-  - El ragdoll puede ocultar este modelo y crear su versión física.
-
-  Esto permite sustituir este muñeco procedural por un GLB riggeado
-  más adelante sin reescribir core/jugador.js.
-*/
 
 const PARTES = {
   pelvis: {
     forma: 'caja',
-    tamano: [0.34, 0.22, 0.24],
+    tamano: [0.34, 0.20, 0.24],
     offset: [0, 0, 0],
-    color: 0x292d33,
+    color: 0x262a30,
+    visibleFPS: true,
   },
   pecho: {
     forma: 'caja',
-    tamano: [0.43, 0.43, 0.25],
-    offset: [0, 0.325, 0],
-    color: 0x343941,
+    tamano: [0.42, 0.42, 0.25],
+    offset: [0, 0.31, 0],
+    color: 0x343a43,
+    visibleFPS: false,
   },
   cabeza: {
     forma: 'esfera',
     radio: 0.145,
-    offset: [0, 0.69, 0],
-    color: 0xc49570,
+    offset: [0, 0.66, 0],
+    color: 0xb98764,
+    visibleFPS: false,
   },
 
   brazoSupIzq: {
-    forma: 'caja',
-    tamano: [0.15, 0.37, 0.16],
-    offset: [-0.31, 0.30, 0],
-    color: 0x343941,
+    forma: 'capsula',
+    radio: 0.072,
+    largo: 0.22,
+    offset: [-0.30, 0.27, 0],
+    color: 0x343a43,
+    visibleFPS: false,
   },
   brazoInfIzq: {
-    forma: 'caja',
-    tamano: [0.135, 0.34, 0.145],
-    offset: [-0.31, -0.045, -0.005],
-    color: 0xc49570,
+    forma: 'capsula',
+    radio: 0.062,
+    largo: 0.20,
+    offset: [-0.30, -0.01, 0],
+    color: 0xb98764,
+    visibleFPS: false,
   },
   brazoSupDer: {
-    forma: 'caja',
-    tamano: [0.15, 0.37, 0.16],
-    offset: [0.31, 0.30, 0],
-    color: 0x343941,
+    forma: 'capsula',
+    radio: 0.072,
+    largo: 0.22,
+    offset: [0.30, 0.27, 0],
+    color: 0x343a43,
+    visibleFPS: false,
   },
   brazoInfDer: {
-    forma: 'caja',
-    tamano: [0.135, 0.34, 0.145],
-    offset: [0.31, -0.045, -0.005],
-    color: 0xc49570,
+    forma: 'capsula',
+    radio: 0.062,
+    largo: 0.20,
+    offset: [0.30, -0.01, 0],
+    color: 0xb98764,
+    visibleFPS: false,
   },
 
   musloIzq: {
-    forma: 'caja',
-    tamano: [0.19, 0.47, 0.21],
-    offset: [-0.115, -0.345, 0],
-    color: 0x25282d,
+    forma: 'capsula',
+    radio: 0.095,
+    largo: 0.29,
+    offset: [-0.115, -0.29, 0],
+    color: 0x24272d,
+    visibleFPS: true,
   },
   piernaIzq: {
-    forma: 'caja',
-    tamano: [0.17, 0.40, 0.19],
-    offset: [-0.115, -0.78, 0],
-    color: 0x202328,
+    forma: 'capsula',
+    radio: 0.082,
+    largo: 0.28,
+    offset: [-0.115, -0.67, 0],
+    color: 0x202329,
+    visibleFPS: true,
   },
   pieIzq: {
     forma: 'caja',
-    tamano: [0.20, 0.13, 0.37],
-    offset: [-0.115, -1.035, -0.075],
-    color: 0x17191d,
+    tamano: [0.19, 0.12, 0.34],
+    offset: [-0.115, -0.91, -0.075],
+    color: 0x15171b,
+    visibleFPS: true,
   },
 
   musloDer: {
-    forma: 'caja',
-    tamano: [0.19, 0.47, 0.21],
-    offset: [0.115, -0.345, 0],
-    color: 0x25282d,
+    forma: 'capsula',
+    radio: 0.095,
+    largo: 0.29,
+    offset: [0.115, -0.29, 0],
+    color: 0x24272d,
+    visibleFPS: true,
   },
   piernaDer: {
-    forma: 'caja',
-    tamano: [0.17, 0.40, 0.19],
-    offset: [0.115, -0.78, 0],
-    color: 0x202328,
+    forma: 'capsula',
+    radio: 0.082,
+    largo: 0.28,
+    offset: [0.115, -0.67, 0],
+    color: 0x202329,
+    visibleFPS: true,
   },
   pieDer: {
     forma: 'caja',
-    tamano: [0.20, 0.13, 0.37],
-    offset: [0.115, -1.035, -0.075],
-    color: 0x17191d,
+    tamano: [0.19, 0.12, 0.34],
+    offset: [0.115, -0.91, -0.075],
+    color: 0x15171b,
+    visibleFPS: true,
   },
 };
 
-function crearGeometria(datos) {
+function geometriaParte(datos) {
   if (datos.forma === 'esfera') {
-    return new THREE.SphereGeometry(datos.radio, 20, 14);
+    return new THREE.SphereGeometry(datos.radio, 22, 16);
+  }
+
+  if (datos.forma === 'capsula') {
+    return new THREE.CapsuleGeometry(
+      datos.radio,
+      datos.largo,
+      6,
+      12
+    );
   }
 
   return new THREE.BoxGeometry(...datos.tamano);
 }
 
-function crearMaterial(color) {
+function materialParte(color) {
   return new THREE.MeshStandardMaterial({
     color,
-    roughness: 0.72,
-    metalness: 0.03,
+    roughness: 0.78,
+    metalness: 0.02,
   });
 }
 
 export function crearPersonajeVisual(scene) {
   const grupo = new THREE.Group();
-  grupo.name = 'JugadorVisual';
+  grupo.name = 'JugadorWorldBodyV2';
   scene.add(grupo);
 
   const meshes = {};
 
   for (const [nombre, datos] of Object.entries(PARTES)) {
     const mesh = new THREE.Mesh(
-      crearGeometria(datos),
-      crearMaterial(datos.color)
+      geometriaParte(datos),
+      materialParte(datos.color)
     );
 
     mesh.name = `Jugador_${nombre}`;
     mesh.position.fromArray(datos.offset);
+
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
+
+    // Aquí está la corrección más importante:
+    // el jugador local solo ve su parte inferior.
+    mesh.visible = datos.visibleFPS;
 
     grupo.add(mesh);
     meshes[nombre] = mesh;
   }
 
-  /* Todo lo que queda demasiado cerca de la cámara en primera
-     persona se oculta durante el juego normal — el ragdoll sí lo
-     muestra completo (usa clones aparte, no estos meshes).
-     Antes solo se ocultaba la cabeza, pero medido: el PECHO queda
-     a solo 6cm de la cámara (dentro de los 10cm del plano near de
-     la cámara — se recortaba y se veía como si estuvieras dentro
-     del personaje) y los brazos superiores a 26cm — no llegan a
-     recortarse, pero tan cerca se ven enormes y distorsionados.
-     Es el mismo patrón de siempre: ocultar el torso/brazos y dejar
-     solo piernas visibles (para cuando miras hacia abajo) es el
-     estándar en shooters de primera persona — los brazos
-     sosteniendo el arma los pone el sistema de arma aparte.       */
-  const PARTES_OCULTAS_1RA_PERSONA = [
-    'cabeza', 'pecho', 'brazoSupIzq', 'brazoInfIzq', 'brazoSupDer', 'brazoInfDer',
-  ];
-  for (const nombre of PARTES_OCULTAS_1RA_PERSONA) meshes[nombre].visible = false;
+  // Pequeña cintura para que al mirar abajo no haya un corte
+  // abrupto entre cámara y piernas.
+  const cintura = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.18, 0.18, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x252930,
+      roughness: 0.82,
+    })
+  );
+  cintura.position.y = 0.07;
+  cintura.castShadow = true;
+  grupo.add(cintura);
 
   let tiempoPaso = 0;
+  let faseSuavizada = 0;
+
   const eulerCamara = new THREE.Euler(0, 0, 0, 'YXZ');
 
   function actualizar(camera, velocidad, dt) {
     if (!grupo.visible) return;
 
-    // Pelvis 60cm por debajo de los ojos — con la altura de ojos
-    // real del juego (1.7m, mundo.js) y la distancia real pelvis→
-    // planta del pie de este muñeco (1.1m), es el valor que deja
-    // los pies exactamente en el piso. El valor anterior (0.76)
-    // los dejaba 16cm hundidos bajo el suelo.
+    // La raíz queda alrededor de la pelvis. Con ojos a 1.70 m,
+    // esto pone los pies prácticamente sobre y=0.
     grupo.position.set(
       camera.position.x,
-      camera.position.y - 0.6,
+      camera.position.y - 0.79,
       camera.position.z
     );
 
+    // El cuerpo sigue SOLO el yaw.
+    // Mirar arriba/abajo no mete el torso en la cámara.
     eulerCamara.setFromQuaternion(camera.quaternion);
     grupo.rotation.set(0, eulerCamara.y, 0);
 
-    const movimiento = THREE.MathUtils.clamp(velocidad / 5.5, 0, 1);
+    const movimiento = THREE.MathUtils.clamp(
+      (velocidad || 0) / 5.5,
+      0,
+      1
+    );
 
-    if (movimiento > 0.02) {
-      tiempoPaso += dt * (7.0 + movimiento * 3.0);
+    if (movimiento > 0.015) {
+      tiempoPaso += dt * (6.2 + movimiento * 3.8);
     }
 
-    const oscilacion = Math.sin(tiempoPaso) * movimiento;
-    const oscilacion2 = Math.sin(tiempoPaso + Math.PI) * movimiento;
+    faseSuavizada = THREE.MathUtils.lerp(
+      faseSuavizada,
+      movimiento,
+      Math.min(1, dt * 9)
+    );
 
-    meshes.musloIzq.rotation.x = oscilacion * 0.48;
-    meshes.piernaIzq.rotation.x = Math.max(0, -oscilacion) * 0.28;
-    meshes.musloDer.rotation.x = oscilacion2 * 0.48;
-    meshes.piernaDer.rotation.x = Math.max(0, -oscilacion2) * 0.28;
+    const pasoIzq = Math.sin(tiempoPaso) * faseSuavizada;
+    const pasoDer = Math.sin(tiempoPaso + Math.PI) * faseSuavizada;
 
-    meshes.brazoSupIzq.rotation.x = oscilacion2 * 0.22;
-    meshes.brazoSupDer.rotation.x = oscilacion * 0.22;
+    meshes.musloIzq.rotation.x = pasoIzq * 0.44;
+    meshes.musloDer.rotation.x = pasoDer * 0.44;
 
-    const bob = Math.abs(Math.sin(tiempoPaso * 2)) * 0.012 * movimiento;
-    meshes.pelvis.position.y = PARTES.pelvis.offset[1] + bob;
-    meshes.pecho.position.y = PARTES.pecho.offset[1] + bob * 0.7;
+    meshes.piernaIzq.rotation.x =
+      Math.max(0, -pasoIzq) * 0.30;
+    meshes.piernaDer.rotation.x =
+      Math.max(0, -pasoDer) * 0.30;
 
-    if (movimiento <= 0.02) {
-      meshes.musloIzq.rotation.x *= Math.max(0, 1 - dt * 12);
-      meshes.musloDer.rotation.x *= Math.max(0, 1 - dt * 12);
-      meshes.piernaIzq.rotation.x *= Math.max(0, 1 - dt * 12);
-      meshes.piernaDer.rotation.x *= Math.max(0, 1 - dt * 12);
-      meshes.brazoSupIzq.rotation.x *= Math.max(0, 1 - dt * 12);
-      meshes.brazoSupDer.rotation.x *= Math.max(0, 1 - dt * 12);
-    }
+    meshes.pieIzq.rotation.x =
+      Math.max(0, pasoIzq) * -0.11;
+    meshes.pieDer.rotation.x =
+      Math.max(0, pasoDer) * -0.11;
+
+    // Leve movimiento de pelvis, mucho más discreto que V1.
+    grupo.position.y +=
+      Math.abs(Math.sin(tiempoPaso * 2)) *
+      0.009 *
+      faseSuavizada;
 
     grupo.updateMatrixWorld(true);
   }
 
   function mostrarAnimado(visible) {
     grupo.visible = visible;
-    for (const nombre of PARTES_OCULTAS_1RA_PERSONA) meshes[nombre].visible = false;
+
+    if (visible) {
+      for (const [nombre, datos] of Object.entries(PARTES)) {
+        meshes[nombre].visible = datos.visibleFPS;
+      }
+      cintura.visible = true;
+    }
   }
 
   function obtenerPartesRagdoll() {
@@ -222,7 +270,11 @@ export function crearPersonajeVisual(scene) {
       const quaternion = new THREE.Quaternion();
       const escala = new THREE.Vector3();
 
-      mesh.matrixWorld.decompose(posicion, quaternion, escala);
+      mesh.matrixWorld.decompose(
+        posicion,
+        quaternion,
+        escala
+      );
 
       return {
         nombre,
@@ -242,3 +294,4 @@ export function crearPersonajeVisual(scene) {
     obtenerPartesRagdoll,
   };
 }
+
