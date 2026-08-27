@@ -24,8 +24,17 @@ import {
   sonidoConfirmar, parametrosDisparoDeArma,
 } from './audio/sfx.js';
 
+// NUEVO: personaje visual + física + ragdoll.
+import { crearMundoFisico } from './fisica/mundoFisico.js';
+import { crearPersonajeVisual } from './personaje/personajeVisual.js';
+import { crearRagdoll } from './personaje/ragdoll.js';
+
 const { scene, camera, renderer, sol, ALTURA_OJOS } = crearMundo();
 const efectos = crearEfectos(scene);
+
+// Rapier usa WASM, así que su inicialización es asíncrona.
+// Vite soporta top-level await en módulos modernos.
+const fisica = await crearMundoFisico();
 
 // el cielo decide de dónde viene la luz — se la pasamos a la luz
 // direccional para que las sombras apunten para el lado correcto
@@ -54,6 +63,18 @@ const jugador = crearJugador(camera, document.body, {
   animador,
 });
 
+// NUEVO: cuerpo procedural del jugador.
+// Este módulo solo representa visualmente al personaje.
+const personaje = crearPersonajeVisual(scene);
+personaje.actualizar(camera, 0, 0);
+
+// NUEVO: ragdoll físico. Actualmente F8 lo activa para pruebas.
+const ragdoll = crearRagdoll({
+  scene,
+  fisica,
+  personaje,
+});
+
 /* Arma las estadísticas finales de una selección de piezas — la
    misma función que usa el banco de trabajo, para que cambiar
    de espacio de inventario dé exactamente el mismo resultado
@@ -61,6 +82,7 @@ const jugador = crearJugador(camera, document.body, {
    vacío del inventario, "manos vacías").                        */
 function estadisticasDeSeleccion(seleccion) {
   if (!seleccion) return null;
+
   return ensamblarArma({
     cuerpo: CUERPOS[seleccion.cuerpo],
     cañon: CAÑONES[seleccion.cañon],
@@ -78,9 +100,17 @@ function estadisticasDeSeleccion(seleccion) {
 // partida por defecto, en el espacio 1 del inventario; los otros
 // 7 espacios arrancan vacíos ("manos vacías" al seleccionarlos)
 const seleccionInicial = {
-  cuerpo: 'pistola', cañon: 'estandar', cargador: 'medio', mira: 'ninguna', boca: 'ninguna',
-  empuñadura: 'ninguna', gatillo: 'ninguno', municion: 'estandar', acabado: 'fabrica',
+  cuerpo: 'pistola',
+  cañon: 'estandar',
+  cargador: 'medio',
+  mira: 'ninguna',
+  boca: 'ninguna',
+  empuñadura: 'ninguna',
+  gatillo: 'ninguno',
+  municion: 'estandar',
+  acabado: 'fabrica',
 };
+
 const estadisticasArma = estadisticasDeSeleccion(seleccionInicial);
 const arma = crearArma(camera, animador, estadisticasArma, seleccionInicial);
 const inventario = crearInventario(seleccionInicial);
@@ -95,9 +125,12 @@ const exhibidor = crearExhibidorArma(scene, taller.superficieMesa);
 // Y modelo visual juntos) Y actualiza el espacio activo del
 // inventario, para que no se pierda al cambiar de espacio después
 const posicionMesaJugador = taller.posicionMesa.clone().setY(ALTURA_OJOS);
+
 const banco = crearBancoTrabajo({
   posicionMesa: posicionMesaJugador,
-  posicionExhibidor: taller.superficieMesa.clone().setY(taller.superficieMesa.y + 0.05),   // la superficie ya viene calculada del taller, solo el margen del arma
+  posicionExhibidor: taller.superficieMesa
+    .clone()
+    .setY(taller.superficieMesa.y + 0.05),
   radioInteraccion: 2.2,
   controls: jugador.controls,
   camera,
@@ -108,6 +141,7 @@ const banco = crearBancoTrabajo({
     arma.actualizarArma(nuevasEstadisticas, nuevaSeleccion);
   },
 });
+
 let cercaDeLaMesa = false;
 
 /* menú principal, menú de pausa, y HUD — el primer bloqueo SOLO
@@ -118,14 +152,22 @@ const menuPausa = document.getElementById('menuPausa');
 let juegoIniciado = false;
 
 document.getElementById('btnJugar').onclick = () => {
-  iniciarAudio();   // el navegador solo permite audio tras un gesto real del usuario
+  iniciarAudio();
   juegoIniciado = true;
   menuPrincipal.style.display = 'none';
   jugador.controls.lock();
 };
+
 document.getElementById('btnReanudar').onclick = () => jugador.controls.lock();
-document.addEventListener('click', () => { if (juegoIniciado && !banco.abierto) jugador.controls.lock(); });
-jugador.controls.addEventListener('lock', () => { menuPausa.style.display = 'none'; });
+
+document.addEventListener('click', () => {
+  if (juegoIniciado && !banco.abierto) jugador.controls.lock();
+});
+
+jugador.controls.addEventListener('lock', () => {
+  menuPausa.style.display = 'none';
+});
+
 jugador.controls.addEventListener('unlock', () => {
   if (juegoIniciado && !banco.abierto) menuPausa.style.display = 'flex';
   apuntando = false;
@@ -137,42 +179,81 @@ jugador.controls.addEventListener('unlock', () => {
    menú de clic derecho encima de todo cada vez que apuntas.    */
 let apuntando = false;
 let gatilloPresionado = false;
+
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+
 document.addEventListener('mousedown', (e) => {
   if (!jugador.controls.isLocked || banco.abierto) return;
+
   if (e.button === 0) gatilloPresionado = true;
   if (e.button === 2) apuntando = true;
 });
+
 document.addEventListener('mouseup', (e) => {
   if (e.button === 0) gatilloPresionado = false;
   if (e.button === 2) apuntando = false;
 });
 
 const TECLAS_INVENTARIO = {
-  Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3,
-  Digit5: 4, Digit6: 5, Digit7: 6, Digit8: 7,
+  Digit1: 0,
+  Digit2: 1,
+  Digit3: 2,
+  Digit4: 3,
+  Digit5: 4,
+  Digit6: 5,
+  Digit7: 6,
+  Digit8: 7,
 };
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && jugador.controls.isLocked) {
     const antes = arma.estado();
     arma.recargar();
-    // solo suena si la recarga de verdad arrancó — presionar R con
-    // el cargador lleno no hace nada, y tampoco debería sonar
+
     if (!antes.recargando && arma.estado().recargando) {
       const sel = inventario.armaActiva();
       sonidoRecarga(sel ? (CARGADORES[sel.cargador]?.peso ?? 0.2) : 0.2);
     }
   }
-  if (e.code === 'KeyE' && jugador.controls.isLocked && cercaDeLaMesa) banco.abrir();
-  if (e.code === 'KeyF' && jugador.controls.isLocked && !banco.abierto) arma.inspeccionar(true);
+
+  if (e.code === 'KeyE' && jugador.controls.isLocked && cercaDeLaMesa) {
+    banco.abrir();
+  }
+
+  if (e.code === 'KeyF' && jugador.controls.isLocked && !banco.abierto) {
+    arma.inspeccionar(true);
+  }
+
+  // NUEVO:
+  // F8 alterna el ragdoll para probarlo antes de tener sistema de vida.
+  if (e.code === 'F8' && juegoIniciado && !banco.abierto) {
+    e.preventDefault();
+
+    const direccion = new THREE.Vector3();
+    camera.getWorldDirection(direccion);
+
+    // El impulso va hacia adelante y un poco hacia arriba.
+    direccion.multiplyScalar(2.4);
+    direccion.y += 0.65;
+
+    ragdoll.alternar({
+      impulso: direccion,
+      puntoImpulso: 'pecho',
+    });
+  }
 });
+
 document.addEventListener('keyup', (e) => {
   if (e.code === 'KeyF') arma.inspeccionar(false);
 
   if (jugador.controls.isLocked && e.code in TECLAS_INVENTARIO) {
     inventario.seleccionar(TECLAS_INVENTARIO[e.code]);
+
     const seleccionActiva = inventario.armaActiva();
-    arma.actualizarArma(estadisticasDeSeleccion(seleccionActiva), seleccionActiva);
+    arma.actualizarArma(
+      estadisticasDeSeleccion(seleccionActiva),
+      seleccionActiva
+    );
   }
 });
 
@@ -181,90 +262,133 @@ document.addEventListener('keyup', (e) => {
    el arma entrega. Usa meshesDisparables — geometría real, no
    los puntos falsos que usan las paredes para el movimiento.   */
 const raycaster = new THREE.Raycaster();
+
 function intentarDisparar() {
   const disparo = arma.disparar();
+
   if (!disparo) {
-    // click seco: solo si de verdad es por falta de balas, no por
-    // estar recargando o esperando la cadencia
     const est = arma.estado();
-    if (!est.sinArma && !est.recargando && est.balas === 0) sonidoVacio();
+
+    if (!est.sinArma && !est.recargando && est.balas === 0) {
+      sonidoVacio();
+    }
+
     return;
   }
 
   const seleccionActual = inventario.armaActiva();
-  sonidoDisparo(parametrosDisparoDeArma(null, seleccionActual.cuerpo, seleccionActual.boca));
 
-  // siempre es una LISTA — armas normales traen 1 proyectil, la
-  // escopeta trae varios (perdigones) — el mismo código sirve para
-  // ambos casos, no hace falta distinguir aquí qué arma es
+  sonidoDisparo(
+    parametrosDisparoDeArma(
+      null,
+      seleccionActual.cuerpo,
+      seleccionActual.boca
+    )
+  );
+
   const puntaCanon = arma.obtenerPuntaCanon();
+
   for (const proyectil of disparo.proyectiles) {
     raycaster.set(disparo.origen, proyectil.direccion);
     raycaster.far = disparo.alcance;
+
     const impactos = raycaster.intersectObjects(meshesDisparables);
+
     const destino = impactos.length > 0
       ? impactos[0].point
-      : disparo.origen.clone().addScaledVector(proyectil.direccion, disparo.alcance);
+      : disparo.origen
+          .clone()
+          .addScaledVector(proyectil.direccion, disparo.alcance);
+
     if (impactos.length > 0) {
-      // ya no se tiñe de rojo el objeto golpeado: en una pared
-      // grande eso pintaba TODA la pared, que se veía muy mal.
-      // La marca de impacto persistente comunica el acierto mucho
-      // mejor, y en el lugar exacto donde pegó.
       const normal = impactos[0].face
-        ? impactos[0].face.normal.clone().transformDirection(impactos[0].object.matrixWorld)
+        ? impactos[0].face.normal
+            .clone()
+            .transformDirection(impactos[0].object.matrixWorld)
         : proyectil.direccion.clone().negate();
+
       efectos.marcaImpacto(destino, normal);
-      // si fue un objetivo de la cabina, se tumba y se vuelve a
-      // levantar solo — confirmación inmediata de que acertaste
       cabina.registrarImpacto(impactos[0].object);
     }
-    efectos.trazadoraBala(puntaCanon, destino, disparo.colorTrazadora);
+
+    efectos.trazadoraBala(
+      puntaCanon,
+      destino,
+      disparo.colorTrazadora
+    );
   }
 
-  // casquillo y humo: uno por DISPARO, no por perdigón (una
-  // escopeta expulsa un solo cartucho, no ocho)
   const direccionArma = new THREE.Vector3();
   camera.getWorldDirection(direccionArma);
-  // el calibre real del arma (CUERPOS[cuerpo]) decide el tamaño del
-  // casquillo y si es un cartucho de escopeta (plástico) o de bala
-  // (latón) — antes salía siempre el mismo casquillo sin importar
-  // qué tan grande era el calibre de verdad.
+
   const datosCuerpo = CUERPOS[seleccionActual.cuerpo];
+
   efectos.eyectarCasquillo(
-    puntaCanon.clone().addScaledVector(direccionArma, -0.15), direccionArma, 0.05,
+    puntaCanon.clone().addScaledVector(direccionArma, -0.15),
+    direccionArma,
+    0.05,
     datosCuerpo?.escalaCasquillo ?? 1,
     datosCuerpo?.calibre === 'Calibre 12'
   );
-  const intensidadHumo = seleccionActual.boca === 'silenciador' ? 0.15 : 0.7;
-  efectos.humoCañon(puntaCanon, intensidadHumo, direccionArma);
+
+  const intensidadHumo =
+    seleccionActual.boca === 'silenciador' ? 0.15 : 0.7;
+
+  efectos.humoCañon(
+    puntaCanon,
+    intensidadHumo,
+    direccionArma
+  );
 }
 
 /* ── bucle principal ───────────────────────────────────────── */
 let distanciaCaminada = 0;
-const DISTANCIA_POR_PASO = 1.9;   // metros entre paso y paso
+const DISTANCIA_POR_PASO = 1.9;
 const reloj = new THREE.Clock();
+
 function animar() {
   requestAnimationFrame(animar);
-  const dt = Math.min(reloj.getDelta(), 0.1);   // por si la pestaña pierde foco
+
+  const dt = Math.min(reloj.getDelta(), 0.1);
 
   if (gatilloPresionado) intentarDisparar();
 
   cercaDeLaMesa = banco.actualizarProximidad(camera.position);
   banco.actualizarVista3D();
+
   animador.actualizar(dt);
   efectos.actualizar(dt);
   cabina.actualizar(dt);
 
   const factorPeso = inventario.factorPeso();
-  const { velocidad } = jugador.actualizar(dt, apuntando, factorPeso);
-  if (!banco.abierto) arma.actualizar(dt, velocidad, apuntando, factorPeso);
-  else arma.reiniciarSacudida();
+  const { velocidad } = jugador.actualizar(
+    dt,
+    apuntando,
+    factorPeso
+  );
+
+  if (!banco.abierto) {
+    arma.actualizar(dt, velocidad, apuntando, factorPeso);
+  } else {
+    arma.reiniciarSacudida();
+  }
+
+  // NUEVO:
+  // El modelo animado sigue a la cámara mientras no esté ragdoll.
+  if (!ragdoll.activo) {
+    personaje.actualizar(camera, velocidad, dt);
+  }
+
+  // Paso físico después de actualizar la pose del frame.
+  fisica.actualizar(dt);
+  ragdoll.actualizar();
+
   hud.actualizar(arma.estado(), inventario);
 
-  // pasos por DISTANCIA, no por tiempo — caminar despacio da
-  // pasos más espaciados, sin necesitar temporizadores aparte
+  // pasos por DISTANCIA, no por tiempo
   if (jugador.controls.isLocked && !banco.abierto) {
     distanciaCaminada += velocidad * dt;
+
     if (distanciaCaminada >= DISTANCIA_POR_PASO) {
       distanciaCaminada = 0;
       sonidoPaso();
@@ -273,4 +397,6 @@ function animar() {
 
   renderer.render(scene, camera);
 }
+
 animar();
+
