@@ -44,9 +44,21 @@ export function crearEfectos(scene) {
   const GRAVEDAD_CASQUILLO = -9.5;
   const GEO_CASQUILLO = new THREE.CylinderGeometry(0.004, 0.0045, 0.016, 6);
   const MAT_CASQUILLO = new THREE.MeshStandardMaterial({ color: 0xc9a227, roughness: 0.35, metalness: 0.85 });
+  /* Los cartuchos de escopeta no son latón: son un tubo de
+     plástico de color con base metálica — visualmente muy
+     distintos de un casquillo de bala. Antes TODAS las armas
+     expulsaban exactamente el mismo casquillo, sin importar si
+     era una pistola de 9mm o una escopeta calibre 12.            */
+  const MAT_CARTUCHO_ESCOPETA = new THREE.MeshStandardMaterial({ color: 0xb02020, roughness: 0.55, metalness: 0.15 });
 
-  function eyectarCasquillo(posicion, direccionArma, alturaSuelo) {
-    const mesh = new THREE.Mesh(GEO_CASQUILLO, MAT_CASQUILLO);
+  /* `escala` viene del calibre real del arma (CUERPOS[cuerpo].escalaCasquillo
+     en piezas.js) — antes todos los casquillos medían igual sin
+     importar si el arma era una pistola de 9mm o un rifle de
+     francotirador calibre .308. `esEscopeta` cambia además la
+     geometría y el material al cartucho de plástico.              */
+  function eyectarCasquillo(posicion, direccionArma, alturaSuelo, escala = 1, esEscopeta = false) {
+    const mesh = new THREE.Mesh(GEO_CASQUILLO, esEscopeta ? MAT_CARTUCHO_ESCOPETA : MAT_CASQUILLO);
+    mesh.scale.set(escala, escala, escala);
     mesh.position.copy(posicion);
     mesh.castShadow = true;
     scene.add(mesh);

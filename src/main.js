@@ -225,7 +225,16 @@ function intentarDisparar() {
   // escopeta expulsa un solo cartucho, no ocho)
   const direccionArma = new THREE.Vector3();
   camera.getWorldDirection(direccionArma);
-  efectos.eyectarCasquillo(puntaCanon.clone().addScaledVector(direccionArma, -0.15), direccionArma, 0.05);
+  // el calibre real del arma (CUERPOS[cuerpo]) decide el tamaño del
+  // casquillo y si es un cartucho de escopeta (plástico) o de bala
+  // (latón) — antes salía siempre el mismo casquillo sin importar
+  // qué tan grande era el calibre de verdad.
+  const datosCuerpo = CUERPOS[seleccionActual.cuerpo];
+  efectos.eyectarCasquillo(
+    puntaCanon.clone().addScaledVector(direccionArma, -0.15), direccionArma, 0.05,
+    datosCuerpo?.escalaCasquillo ?? 1,
+    datosCuerpo?.calibre === 'Calibre 12'
+  );
   const intensidadHumo = seleccionActual.boca === 'silenciador' ? 0.15 : 0.7;
   efectos.humoCañon(puntaCanon, intensidadHumo, direccionArma);
 }

@@ -95,6 +95,19 @@ export const CUERPOS = {
                             // premia armarlo bien y apuntar siempre
     retroceso: 0.65,
   },
+  // PDW: compacta, entre la pistola automática y el subfusil —
+  // el ritmo de fuego más alto de las armas "largas" (no cuenta
+  // como pistola), con menos retroceso que el subfusil porque su
+  // calibre real (5.7x28mm) es más chico y rápido, no más potente
+  pdw: {
+    nombre: 'Cuerpo de PDW',
+    calibre: '5.7x28mm',
+    escalaCasquillo: 0.7,
+    peso: 1.6,
+    cadencia: 11,
+    precision: 0.62,
+    retroceso: 0.6,
+  },
 };
 
 export const CAÑONES = {
@@ -251,7 +264,7 @@ export const ACABADOS = {
    revólver ni siquiera usa cargador de caja. Si una categoría o
    clave no aparece aquí, esa pieza es compatible con TODOS los
    cuerpos (así "ninguna"/"ninguno" nunca necesita listarse).    */
-const CUERPOS_LARGOS = ['subfusil', 'rifle', 'escopeta', 'lmg', 'francotirador'];
+const CUERPOS_LARGOS = ['subfusil', 'rifle', 'escopeta', 'lmg', 'francotirador', 'pdw'];
 
 export const COMPATIBILIDAD = {
   mira: {

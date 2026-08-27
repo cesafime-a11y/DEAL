@@ -162,7 +162,10 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
 
     // encabezado: nombre y tipo del arma que estás armando
     nombreArmaEl.textContent = CUERPOS[seleccion.cuerpo].nombre.replace(/^Cuerpo de /, '').toUpperCase();
-    tipoArmaEl.textContent = `${stats.clasificacion} · ${CAÑONES[seleccion.cañon].nombre}`;
+    // el calibre real (CUERPOS[cuerpo].calibre) va en la misma línea
+    // de subtítulo — antes esa información existía en los datos
+    // pero nunca se le mostraba al jugador en ningún lado.
+    tipoArmaEl.textContent = `${stats.clasificacion} · ${CAÑONES[seleccion.cañon].nombre} · ${CUERPOS[seleccion.cuerpo].calibre}`;
 
     // peso del arma armada (solo esta, no el inventario completo)
     const pesoArma = CATEGORIAS.reduce(

@@ -220,8 +220,22 @@ function cuerpoSubfusil() {
   grupo.add(grip);
 
   // culata corta, plegada — más ancho de cuerpo, más presencia que la pistola
+  /* Recorrida 14cm más atrás de su posición original: con el grip
+     dominando el empuje de seguridad (correcto — tu mano SÍ debe
+     quedar lejos de la cámara), esta culata terminaba jalada hasta
+     4-7cm DELANTE de la cámara — visible y dentro de la zona de
+     recorte, en vez de detrás de tu cabeza como debe ser. Pero
+     alejarla sin más dejaba un hueco de 13cm flotando en el aire
+     (se veía como una caja separada, suelta) — el tubo télescopico
+     de abajo es lo que la conecta de verdad al cuerpo.            */
+  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.176, 10), MAT_METAL_CLARO);
+  tuboCulata.rotation.x = Math.PI / 2;
+  tuboCulata.position.set(0, -0.01, 0.227);
+  tuboCulata.userData.esCulata = true;
+  grupo.add(tuboCulata);
   const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.09), MAT_METAL);
-  culata.position.set(0, -0.01, 0.175);
+  culata.position.set(0, -0.01, 0.315);
+  culata.userData.esCulata = true;
   grupo.add(culata);
 
   const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.028, 0.01), MAT_GRIP);
@@ -277,13 +291,24 @@ function cuerpoRifle() {
   grupo.add(grip);
 
   // culata larga, angulada para hombro — la silueta más distinta de las tres
+  /* Recorrida 5cm más atrás: el grip (dominando el empuje de
+     seguridad, correctamente) dejaba la culata a solo 2cm detrás
+     de la cámara — demasiado justo, un pequeño balanceo la metía
+     en la zona de recorte. El tubo conecta el hueco que eso deja.*/
+  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.03, 10), MAT_METAL_CLARO);
+  tuboCulata.rotation.x = Math.PI / 2;
+  tuboCulata.position.set(0, -0.01, 0.186);
+  tuboCulata.userData.esCulata = true;
+  grupo.add(tuboCulata);
   const culata = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.075, 0.19), MAT_METAL);
-  culata.position.set(0, -0.01, 0.245);
+  culata.position.set(0, -0.01, 0.295);
   culata.rotation.x = -0.05;
+  culata.userData.esCulata = true;
   grupo.add(culata);
 
   const almohadilla = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.02), MAT_GRIP);
-  almohadilla.position.set(0, -0.015, 0.335);
+  almohadilla.position.set(0, -0.015, 0.385);
+  almohadilla.userData.esCulata = true;
   grupo.add(almohadilla);
 
   const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.028, 0.01), MAT_GRIP);
@@ -323,8 +348,18 @@ function cuerpoEscopeta() {
   grupo.add(guardamanos);
 
   // culata robusta y recta
+  /* Recorrida 7cm más atrás: quedaba casi tocando el plano de la
+     cámara (3mm de margen) una vez que el grip fija cuánto se
+     empuja el arma hacia atrás al apuntar. El tubo conecta el
+     hueco que eso deja con el resto del cuerpo.                   */
+  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.055, 10), MAT_METAL_CLARO);
+  tuboCulata.rotation.x = Math.PI / 2;
+  tuboCulata.position.set(0, 0.005, 0.1435);
+  tuboCulata.userData.esCulata = true;
+  grupo.add(tuboCulata);
   const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.085, 0.17), MAT_GRIP);
-  culata.position.set(0, 0.005, 0.185);
+  culata.position.set(0, 0.005, 0.255);
+  culata.userData.esCulata = true;
   grupo.add(culata);
 
   const grip = perfilExtruido(siluetaEmpuñadura(0.13, 0.06), 0.058, MAT_GRIP, { bisel: 0.004 });
@@ -469,8 +504,16 @@ function cuerpoLmg() {
   asaSoporteB.position.set(0, 0.068, 0.01);
   grupo.add(asaSoporteB);
 
+  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.026, 10), MAT_METAL_CLARO);
+  tuboCulata.rotation.x = Math.PI / 2;
+  tuboCulata.position.set(0, -0.015, 0.1645);
+  tuboCulata.userData.esCulata = true;
+  grupo.add(tuboCulata);
   const culata = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.2), MAT_GRIP);
-  culata.position.set(0, -0.015, 0.245);
+  // recorrida 3cm más atrás: quedaba a solo 4cm de la cámara una
+  // vez fijado el empuje real por el grip. El tubo conecta el hueco.
+  culata.position.set(0, -0.015, 0.275);
+  culata.userData.esCulata = true;
   grupo.add(culata);
 
   const grip = perfilExtruido(siluetaEmpuñadura(0.14, 0.06), 0.06, MAT_GRIP, { bisel: 0.004 });
@@ -509,6 +552,7 @@ function cuerpoFrancotirador() {
     0.062, MAT_GRIP, { bisel: 0.005 }
   );
   perfilCulata.position.set(0, -0.012, 0.115);
+  perfilCulata.userData.esCulata = true;
   grupo.add(perfilCulata);
 
   agregarRielSuperior(grupo, 0, 0.045, -0.09, 0.07);
@@ -532,9 +576,11 @@ function cuerpoFrancotirador() {
   // culata larga, con carrillera elevada para alinear con la mira
   const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.075, 0.24), MAT_GRIP);
   culata.position.set(0, 0.005, 0.28);
+  culata.userData.esCulata = true;
   grupo.add(culata);
   const carrillera = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.14), MAT_GRIP);
   carrillera.position.set(0, 0.05, 0.24);
+  carrillera.userData.esCulata = true;
   grupo.add(carrillera);
 
   const grip = perfilExtruido(siluetaEmpuñadura(0.12, 0.055), 0.055, MAT_GRIP, { bisel: 0.004 });
@@ -557,10 +603,76 @@ function cuerpoFrancotirador() {
   };
 }
 
+/* PDW (Personal Defense Weapon) — compacta, alto ritmo de fuego,
+   pensada para distancias cortas con más control que un subfusil
+   normal. Comparte silueta 'compacto' con el subfusil pero a
+   menor escala (~75%), con una empuñadura delantera integrada
+   angulada (el detalle que distingue a un PDW real de un subfusil
+   genérico) y una culata mínima, casi un tope de hombro.         */
+function cuerpoPDW() {
+  const grupo = new THREE.Group();
+
+  const receptor = perfilExtruido(
+    siluetaReceptor('compacto', 0.205, 0.095), 0.072, MAT_METAL, { bisel: 0.003 }
+  );
+  grupo.add(receptor);
+  const tapa = cajaBiselada(0.066, 0.011, 0.15, MAT_METAL_CLARO, 0.0025);
+  tapa.position.set(0, 0.0445, -0.008);
+  grupo.add(tapa);
+
+  agregarRielSuperior(grupo, 0, 0.047, -0.085, 0.07);
+  agregarRemaches(grupo, [
+    [0.032, 0.045, -0.09], [-0.032, 0.045, -0.09],
+    [0.032, 0.045, 0.075], [-0.032, 0.045, 0.075],
+  ]);
+  agregarLineaPanel(grupo, 0.036, 0, -0.05, 0.10);
+  agregarLineaPanel(grupo, -0.036, 0, -0.05, 0.10);
+
+  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.02, 0.05), MAT_LENTE_OSCURA);
+  ventanaExpulsion.position.set(0.034, 0.018, -0.015);
+  grupo.add(ventanaExpulsion);
+
+  // empuñadura delantera angulada e integrada al cuerpo — el
+  // detalle que la distingue de un subfusil genérico
+  const grip = perfilExtruido(siluetaEmpuñadura(0.105, 0.048), 0.048, MAT_GRIP, { bisel: 0.0032 });
+  grip.position.set(0, -0.085, 0.045);
+  grip.rotation.x = 0.22;
+  grupo.add(grip);
+
+  // culata mínima, casi un tope de hombro — un PDW prioriza el
+  // tamaño compacto sobre la estabilidad al hombro. Tubo de
+  // conexión desde el principio (ver la lección del subfusil): la
+  // culata siempre queda lejos de la cámara por seguridad, así que
+  // sin el tubo se vería como una caja suelta, separada del arma.
+  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.153, 10), MAT_METAL_CLARO);
+  tuboCulata.rotation.x = Math.PI / 2;
+  tuboCulata.position.set(0, -0.008, 0.181);
+  tuboCulata.userData.esCulata = true;
+  grupo.add(tuboCulata);
+  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.055), MAT_METAL);
+  culata.position.set(0, -0.008, 0.285);
+  culata.userData.esCulata = true;
+  grupo.add(culata);
+
+  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.022, 0.008), MAT_GRIP);
+  gatillo.position.set(0, -0.04, 0.015);
+  grupo.add(gatillo);
+  agregarGuardamonte(grupo, 0, -0.028, 0.015, 0.018);
+
+  return {
+    grupo,
+    puntoCañon: new THREE.Vector3(0, 0.012, -0.10),
+    puntoCargador: new THREE.Vector3(0, -0.135, 0.045),
+    puntoMira: new THREE.Vector3(0, 0.052, -0.022),
+    puntoEmpuñadura: new THREE.Vector3(0, -0.04, -0.055),
+    huecoMira: 0.007,
+  };
+}
+
 const FABRICAS_CUERPO = {
   pistola: cuerpoPistola, subfusil: cuerpoSubfusil, rifle: cuerpoRifle,
   escopeta: cuerpoEscopeta, revolver: cuerpoRevolver, automatica: cuerpoAutomatica,
-  lmg: cuerpoLmg, francotirador: cuerpoFrancotirador,
+  lmg: cuerpoLmg, francotirador: cuerpoFrancotirador, pdw: cuerpoPDW,
 };
 
 /* ── cañones — cada uno reporta su longitud real, para saber   ─
@@ -801,7 +913,17 @@ function miraHierro(puntaCañonLocal, huecoMira) {
 
   // el ojo va detrás de la muesca, a su misma altura, para que el
   // poste delantero caiga justo en medio de las orejas
-  return { grupo, puntoOcular: new THREE.Vector3(0, Y_OREJAS + 0.002, 0.055) };
+  /* Distancia ocular real: el alza trasera (base + orejas + puente)
+     llega hasta z=0.0295 local, así que con 0.055 solo había 2.55cm
+     libres de verdad — muy por debajo de los ~12cm que necesita el
+     plano near de la cámara (10cm + colchón). El alza trasera se
+     recortaba y llenaba toda la pantalla al apuntar (igual que le
+     pasó a reflex/holográfica/prismática/telescópica). Con 0.19
+     quedan ~16cm — con margen extra para el empuje de retroceso
+     al disparar apuntando. La altura de mira (Y) no cambia, así
+     que la alineación poste/muesca sigue intacta, solo se aleja
+     el ojo.*/
+  return { grupo, puntoOcular: new THREE.Vector3(0, Y_OREJAS + 0.002, 0.19) };
 }
 
 function miraReflex(_puntaCañonLocal, huecoMira) {
@@ -858,8 +980,9 @@ function miraReflex(_puntaCañonLocal, huecoMira) {
   // (más un colchón) la propia carcasa de la mira se recorta y se
   // ve como si la atravesaras. Medido: la base de esta mira llega
   // hasta z=0.025 local, así que con 0.11 solo había 8.5cm de
-  // verdad libres — no alcanzaba. 0.15 deja ~12.5cm reales.
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.15) };
+  // verdad libres — no alcanzaba. Con 0.18 quedan ~15cm — con
+  // margen extra para el empuje de retroceso al disparar apuntando.
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.18) };
 }
 
 function miraHolografica(_puntaCañonLocal, huecoMira) {
@@ -916,8 +1039,8 @@ function miraHolografica(_puntaCañonLocal, huecoMira) {
   // igual que en la reflex: el bloque de electrónica llega hasta
   // z=0.035 local, así que 0.12 solo dejaba 8.5cm reales de
   // distancia ocular — menos de los 10cm+colchón que necesita la
-  // cámara. Con 0.16 quedan ~12.5cm reales.
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.16) };
+  // cámara. Con 0.19 quedan ~16.5cm — con margen extra para el empuje de retroceso al disparar apuntando.
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.19) };
 }
 
 function miraLaser() {
@@ -938,8 +1061,11 @@ function miraLaser() {
   grupo.add(boton);
 
   // no es un óptico — no hay nada que "mirar a través", se
-  // comporta como apuntar sin mira
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.02, 0.04) };
+  // comporta como apuntar sin mira, PERO sí tiene cuerpo físico
+  // (la carcasa del láser) que puede recortarse igual que las
+  // demás miras: llega hasta z=0.025 local, y con 0.04 solo había
+  // 1.5cm reales — el peor caso de todos. Con 0.18 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.
+  return { grupo, puntoOcular: new THREE.Vector3(0, 0.02, 0.18) };
 }
 
 function miraPrismatica(_puntaCañonLocal, huecoMira) {
@@ -1013,13 +1139,26 @@ function miraPrismatica(_puntaCañonLocal, huecoMira) {
   // distancia ocular generosa — pero el capuchón del ocular llega
   // hasta z=0.049 local, así que con 0.15 solo quedaban 10.1cm
   // reales, un poco corto contra el plano near de la cámara
-  // (10cm+colchón). Con 0.18 quedan ~13cm reales.
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.18) };
+  // (10cm+colchón). Con 0.21 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.21) };
 }
 
 function miraTelescopica(_puntaCañonLocal, huecoMira) {
   const grupo = new THREE.Group();
   const ALTO_TUBO = 0.03;    // eje del tubo sobre el punto de montaje
+
+  /* El tubo y las campanas se agrandaron ~1.9x en su radio (de
+     0.015 a 0.028 en el tubo principal) respecto al diseño
+     anterior. No es un capricho estético: cuando se alejó el ojo
+     de 0.17 a 0.26 para el arreglo del recorte de cámara, el tubo
+     -con su radio viejo- pasó a verse mucho más chico y lejano en
+     el campo de visión real, y alrededor de ese "hoyo" angosto
+     empezaba a entrar en cuadro todo lo que está montado por
+     fuera (torreta, anillos de montura) — eso es justo el
+     desorden que se reportó. Con el tubo más grande, vuelve a
+     llenar la vista como un visor real, y lo de afuera queda
+     donde debe: fuera de cuadro.                                  */
+  const RADIO_TUBO = 0.028;
 
   // Patas de montaje: bajan lo justo para cubrir el hueco real del
   // cuerpo al que se monta, con traslape.
@@ -1027,13 +1166,13 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
   const profundidad = TOPE_PATA + (huecoMira ?? 0.008) + 0.006;
   const centroPata = (TOPE_PATA - profundidad) / 2;
 
-  for (const z of [-0.03, 0.034]) {
-    const pata = new THREE.Mesh(new THREE.BoxGeometry(0.022, profundidad, 0.016), MAT_METAL);
+  for (const z of [-0.032, 0.038]) {
+    const pata = new THREE.Mesh(new THREE.BoxGeometry(0.024, profundidad, 0.018), MAT_METAL);
     pata.position.set(0, centroPata, z);
     grupo.add(pata);
     // anillo que abraza el tubo — cerrado por fuera, así se ve
     // como una montura de verdad y no como un aro flotando
-    const anillo = new THREE.Mesh(new THREE.CylinderGeometry(0.0205, 0.0205, 0.014, 16, 1, true), MAT_TUBO);
+    const anillo = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.0075, RADIO_TUBO + 0.0075, 0.016, 20, 1, true), MAT_TUBO);
     anillo.rotation.x = Math.PI / 2;
     anillo.position.set(0, ALTO_TUBO, z);
     grupo.add(anillo);
@@ -1045,31 +1184,30 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
      un tubo SÓLIDO por fuera — la vista a través se resuelve con el
      punto ocular (arma.js coloca tu ojo justo en el lente trasero),
      no dejando el tubo transparente.                              */
-  const tubo = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.125, 16, 1, true), MAT_TUBO);
+  const tubo = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO, RADIO_TUBO, 0.125, 20, 1, true), MAT_TUBO);
   tubo.rotation.x = Math.PI / 2;
   tubo.position.set(0, ALTO_TUBO, 0.004);
   grupo.add(tubo);
 
   // campana delantera (objetivo) — más ancha, es lo que da la
   // silueta reconocible de un visor
-  const campanaDelantera = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.0185, 0.038, 16, 1, true), MAT_TUBO);
+  const campanaDelantera = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.012, RADIO_TUBO + 0.006, 0.042, 20, 1, true), MAT_TUBO);
   campanaDelantera.rotation.x = Math.PI / 2;
-  campanaDelantera.position.set(0, ALTO_TUBO, -0.078);
+  campanaDelantera.position.set(0, ALTO_TUBO, -0.082);
   grupo.add(campanaDelantera);
 
   // campana trasera (ocular)
-  const campanaTrasera = new THREE.Mesh(new THREE.CylinderGeometry(0.0235, 0.021, 0.036, 16, 1, true), MAT_TUBO);
+  const campanaTrasera = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.016, RADIO_TUBO + 0.008, 0.04, 20, 1, true), MAT_TUBO);
   campanaTrasera.rotation.x = Math.PI / 2;
-  campanaTrasera.position.set(0, ALTO_TUBO, 0.082);
+  campanaTrasera.position.set(0, ALTO_TUBO, 0.086);
   grupo.add(campanaTrasera);
 
-  /* Torreta única de elevación — antes traía también la de deriva
-     (al lado) más un anillo de zoom con 8 estrías repetidas: mucho
-     detalle exterior que el usuario reportó como "muy cargada".
-     Simplificado a lo esencial que sigue leyéndose como visor
-     ajustable (una torreta) sin la sobrecarga de piezas repetidas.  */
-  const torretaArriba = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.016, 12), MAT_METAL_CLARO);
-  torretaArriba.position.set(0, ALTO_TUBO + 0.019, 0.004);
+  /* Torreta única de elevación — se aleja del eje del tubo lo
+     mismo que creció el radio, para que se mantenga proporcionada
+     y afuera del cono de visión al apuntar (antes se posicionaba
+     pegada al radio viejo, mucho más chico).                     */
+  const torretaArriba = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.018, 12), MAT_METAL_CLARO);
+  torretaArriba.position.set(0, ALTO_TUBO + RADIO_TUBO + 0.009, 0.004);
   grupo.add(torretaArriba);
 
   // lente delantera y trasera, ahora con cuerpo visible
@@ -1092,15 +1230,17 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
   const MAT_RETICULA_VISIBLE = MAT_RETICULA.clone();
   MAT_RETICULA_VISIBLE.depthTest = false;
   const Z_RETICULA = 0.094;
-  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.0035, 0.045, 0.0008), MAT_RETICULA_VISIBLE);
+  // escalada junto con el tubo (que creció ~1.9x) para que siga
+  // viéndose proporcionada dentro del campo visual más grande
+  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.08, 0.0008), MAT_RETICULA_VISIBLE);
   cruzV.position.set(0, ALTO_TUBO, Z_RETICULA);
   cruzV.renderOrder = 999;
   grupo.add(cruzV);
-  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.0035, 0.0008), MAT_RETICULA_VISIBLE);
+  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.006, 0.0008), MAT_RETICULA_VISIBLE);
   cruzH.position.set(0, ALTO_TUBO, Z_RETICULA);
   cruzH.renderOrder = 999;
   grupo.add(cruzH);
-  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0026, 12), MAT_PUNTO_ROJO.clone());
+  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0042, 14), MAT_PUNTO_ROJO.clone());
   puntoCentro.material.depthTest = false;
   puntoCentro.position.set(0, ALTO_TUBO, Z_RETICULA + 0.0006);
   puntoCentro.renderOrder = 1000;
@@ -1118,8 +1258,8 @@ function miraTelescopica(_puntaCañonLocal, huecoMira) {
      campana trasera (que llega hasta z=0.1 local) — menos que el
      plano near de la cámara (10cm) más colchón, así que la propia
      campana se recortaba y se veía como un anillo gigante y
-     deformado llenando la pantalla. Con 0.23 quedan ~13cm reales.*/
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.23) };
+     deformado llenando la pantalla. Con 0.26 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.*/
+  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.26) };
 }
 
 const FABRICAS_MIRA = {
@@ -1432,26 +1572,43 @@ export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empu
   // quedar DETRÁS de la cámara, viéndose como si la atravesaras.
   const puntoOcular = partesCuerpo.puntoMira.clone().add(partesMira.puntoOcular);
 
-  /* Qué tan cerca de la cámara se puede dejar la geometría del
-     GRIP (tu mano) sin que se vea mal — una culata que se extienda
-     más allá NO cuenta, es normal que quede detrás de tu cabeza al
-     apuntar, como en cualquier shooter en primera persona.
-     Nota: esto NO resuelve el problema de que una mira concreta
-     (su propio tubo/carcasa) quede pegada a su propio punto
-     ocular — eso se corrige en cada función de mira, ajustando su
-     `puntoOcular` con suficiente distancia real (ver miraReflex,
-     miraHolografica, miraPrismatica y miraTelescopica).            */
-  const LIMITE_ZONA_GRIP = partesCuerpo.puntoEmpuñadura.z + 0.06;
+  /* Qué tan cerca de la cámara puede quedar CUALQUIER pieza del
+     arma sin que se recorte contra el plano near de la cámara
+     (0.1, ver core/mundo.js). Todo lo que NO sea culata cuenta —
+     los intentos anteriores intentaban adivinar "hasta dónde llega
+     lo que importa" con un número fijo (la zona de la empuñadura
+     accesoria, luego la del grip): ese número SIEMPRE terminaba
+     excluyendo por accidente algo real. Primero la carcasa de las
+     miras de poco zoom (reflex/holográfica/prismática/telescópica
+     — arregladas subiendo su propia distancia ocular). Después las
+     estrías de la corredera de una pistola SIN mira: un arma corta
+     no tiene "zona de grip" que sirva de corte, casi todo su
+     cuerpo cae detrás de cualquier límite fijo razonable, así que
+     el escaneo nunca las veía.
+
+     Ahora la única pieza que se excluye es la que está marcada
+     EXPLÍCITAMENTE como culata (ver userData.esCulata en cada
+     cuerpoXxx que la tiene — subfusil, rifle, escopeta, lmg,
+     francotirador). Todo lo demás, sin excepción ni suposición de
+     dónde "debería" estar el corte, tiene que quedar a una
+     distancia segura de la cámara.
+
+     El margen incluye colchón para el empujón de retroceso al
+     disparar apuntando (ver arma.js): en el peor caso (el arma de
+     más retroceso del juego, en ráfaga sostenida) ese empujón es
+     de hasta ~2cm — el margen de aquí ya lo cubre.                */
+  const NEAR = 0.1;
+  const MARGEN_SEGURIDAD_Z = -(NEAR + 0.05);   // -0.15: near + colchón + reserva de retroceso
+
   let zMasAtras = -Infinity;
   grupo.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData.esCulata) return;
     const caja = new THREE.Box3().setFromObject(o);
-    if (caja.max.z > zMasAtras && caja.max.z <= LIMITE_ZONA_GRIP) zMasAtras = caja.max.z;
+    if (caja.max.z > zMasAtras) zMasAtras = caja.max.z;
   });
-  if (zMasAtras === -Infinity) zMasAtras = LIMITE_ZONA_GRIP;
+  if (zMasAtras === -Infinity) zMasAtras = 0;
 
   const posApuntando = puntoOcular.clone().negate();
-  const MARGEN_SEGURIDAD_Z = -0.03;
   const zFinalPuntoMasAtras = zMasAtras + posApuntando.z;
   if (zFinalPuntoMasAtras > MARGEN_SEGURIDAD_Z) {
     posApuntando.z -= (zFinalPuntoMasAtras - MARGEN_SEGURIDAD_Z);

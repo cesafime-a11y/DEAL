@@ -313,7 +313,18 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
     // como si el arma "se despegara" de golpe al apuntar. Se
     // atenúa hasta un 45% al apuntar del todo, nunca desaparece.
     const factorRetrocesoVisual = 1 - apuntandoActual * 0.45;
+    /* El empuje en Z (el arma viene HACIA la cámara al disparar) es
+       otra historia: ese es justo el que puede meter la carcasa de
+       la mira dentro del plano near de la cámara — con un arma de
+       retroceso alto disparando seguido, llegaba a empujar 7cm de
+       más, y con eso CUALQUIER mira (no solo una) terminaba
+       recortándose mientras disparabas apuntando, aunque en reposo
+       (sin disparar) se viera perfecta. Se atenúa muchísimo más
+       (85%) que el golpe en Y — el "vaivén" hacia arriba se
+       conserva, pero el arma ya no se te viene encima de la cara.*/
+    const factorRetrocesoVisualZ = 1 - apuntandoActual * 0.85;
     const retrocesoVisual = retroceso * factorRetrocesoVisual;
+    const retrocesoVisualZ = retroceso * factorRetrocesoVisualZ;
     // animar la inspección igual que el apuntado, nunca de golpe
     const pasoInspeccion = VELOCIDAD_INSPECCION * dt;
     inspeccionando = inspeccionObjetivo > inspeccionando
@@ -323,7 +334,7 @@ export function crearArma(camera, animador, estadisticasIniciales, seleccionInic
     grupo.position.set(
       posActual.x + balanceoX - inspeccionando * 0.1,
       posActual.y + balanceoY + respiro + retrocesoVisual * 0.042 - offsetRecarga * 0.14 + inspeccionando * 0.06,
-      posActual.z + retrocesoVisual * 0.085 + offsetRecarga * 0.05 + inspeccionando * 0.16
+      posActual.z + retrocesoVisualZ * 0.085 + offsetRecarga * 0.05 + inspeccionando * 0.16
     );
     grupo.rotation.y = THREE.MathUtils.lerp(rotCadera, 0, apuntandoActual) + inspeccionando * 0.85;
     grupo.rotation.x = -retrocesoVisual * 0.15 + offsetRecarga * 0.5 + inspeccionando * 0.22;

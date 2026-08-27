@@ -243,7 +243,8 @@ describe('catálogo de piezas', () => {
   });
 
   it('el conteo de las categorías existentes creció como se acordó', () => {
-    expect(Object.keys(CUERPOS)).toHaveLength(8);
+    // +1: pdw
+    expect(Object.keys(CUERPOS)).toHaveLength(9);
     // +1: ultraligero
     expect(Object.keys(CAÑONES)).toHaveLength(5);
     expect(Object.keys(CARGADORES)).toHaveLength(4);

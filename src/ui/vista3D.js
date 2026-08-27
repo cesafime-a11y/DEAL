@@ -10,7 +10,13 @@ import { construirModeloArma, liberarModeloArma } from '../armas/modeloArma.js';
 
 export function crearVista3D(canvasEl) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x100e0c);
+  /* Fondo gris claro tipo estudio de producto, en vez de casi negro:
+     contra un fondo oscuro, el metal oscuro del arma (MAT_METAL es
+     casi negro, 0x2a2a2e) se perdía y era difícil distinguir bordes
+     o huecos reales. Con un fondo claro la silueta se lee de
+     inmediato, que es justo el punto de esta ventana — poder
+     revisar la geometría de verdad.                                */
+  scene.background = new THREE.Color(0xc7cbd1);
 
   const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 5);
   const DISTANCIA = 0.55;
@@ -22,8 +28,8 @@ export function crearVista3D(canvasEl) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1.15));
-  const luzPrincipal = new THREE.DirectionalLight(0xffe4bd, 1.8);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+  const luzPrincipal = new THREE.DirectionalLight(0xffe4bd, 1.9);
   luzPrincipal.position.set(1.4, 1.8, 1.2);
   luzPrincipal.castShadow = true;
   luzPrincipal.shadow.mapSize.set(1024, 1024);
@@ -31,18 +37,23 @@ export function crearVista3D(canvasEl) {
   luzPrincipal.shadow.camera.top = 0.4; luzPrincipal.shadow.camera.bottom = -0.4;
   luzPrincipal.shadow.bias = -0.002;
   scene.add(luzPrincipal);
-  const luzRelleno = new THREE.DirectionalLight(0x7f96ff, 0.55);
+  // relleno más fuerte que antes: contra el fondo claro, las caras
+  // en sombra del arma se veían como manchas negras sin detalle —
+  // esto les da suficiente luz para distinguir su propia forma.
+  const luzRelleno = new THREE.DirectionalLight(0x8fa2ff, 0.85);
   luzRelleno.position.set(-1.3, 0.3, -0.8);
   scene.add(luzRelleno);
-  const luzTrasera = new THREE.DirectionalLight(0xffffff, 0.4);
+  const luzTrasera = new THREE.DirectionalLight(0xffffff, 0.5);
   luzTrasera.position.set(0, 0.5, -1.5);
   scene.add(luzTrasera);
 
   // un plano de apoyo, sutil — sin esto el arma se sentía flotando
-  // en el vacío, sin ningún punto de contacto con nada
+  // en el vacío, sin ningún punto de contacto con nada. Tono un
+  // poco más oscuro que el fondo (no negro): con fondo claro, un
+  // disco casi negro se veía como un hoyo, no como una base.
   const piso = new THREE.Mesh(
     new THREE.CircleGeometry(0.32, 24),
-    new THREE.MeshStandardMaterial({ color: 0x1c1a17, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0x9a9ea4, roughness: 0.95 })
   );
   piso.rotation.x = -Math.PI / 2;
   piso.position.y = -0.4;   // verificado contra la combinación más grande posible (francotirador+cargador grande llega a Y=-0.342)
