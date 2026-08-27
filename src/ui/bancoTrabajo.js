@@ -9,7 +9,7 @@
    verdad se reconstruya igual.
 ──────────────────────────────────────────────────────────── */
 import { Euler } from 'three';
-import { CUERPOS, CAÑONES, CARGADORES, MIRAS, BOCAS, EMPUÑADURAS, GATILLOS, MUNICIONES, ACABADOS, esPiezaCompatible } from '../armas/piezas.js';
+import { CUERPOS, CAÑONES, CARGADORES, MIRAS, BOCAS, EMPUÑADURAS, GATILLOS, MUNICIONES, ACABADOS, esPiezaCompatible, ORDEN_CLASES, cuerposPorClase } from '../armas/piezas.js';
 import { ensamblarArma } from '../armas/ensamblar.js';
 import { crearVista3D } from './vista3D.js';
 
@@ -21,24 +21,32 @@ import { crearVista3D } from './vista3D.js';
    fija, encuadrada una sola vez con números reales (verificado
    que hasta el arma más larga posible cabe completa en cuadro),
    y se restaura tu posición/orientación real al cerrar.         */
-/* Con el rediseño de armería el arma va CENTRADA en pantalla, con
-   las columnas de accesorios y estadísticas a los lados — así que
-   la vista dejó de ser tan cenital (era casi desde arriba, para
-   caber junto a un panel lateral) y ahora es un ángulo de 3/4 que
-   lee mejor la silueta. Los valores salieron de proyectar el arma
-   más larga posible y medir cuánto ocupa en pantalla: ~40% del
-   ancho, que cabe cómodo entre las dos columnas.                 */
-const PITCH_VISTA_BANCO = -25 * Math.PI / 180;
-const ALTURA_CAMARA_BANCO = 0.4;
-const DESPLAZAMIENTO_Z_CAMARA_BANCO = 0.9;
+/* Vista más cercana y cenital-frontal, a pedido: antes era un
+   ángulo de 3/4 bastante abierto (25° de inclinación, arma
+   ocupando solo ~40% del ancho de pantalla). Ahora es mucho más
+   empinada (48°, casi mirando hacia abajo) y más cerca (~48% del
+   ancho en una pantalla 16:9 típica) — verificado por proyección
+   real contra el arma más larga posible (francotirador + cañón
+   largo + telescópica), y también contra el espacio real que deja
+   libre el layout de 3 columnas (300px + 250px fijas) en ventanas
+   chicas de laptop (1366px): cabe completa y con margen. Solo en
+   ventanas MUY angostas y casi cuadradas (4:3, poco común hoy)
+   podría asomarse un poco bajo las columnas laterales.            */
+const PITCH_VISTA_BANCO = -48 * Math.PI / 180;
+const ALTURA_CAMARA_BANCO = 0.6;
+const DESPLAZAMIENTO_Z_CAMARA_BANCO = 0.62;
 
 const CATEGORIAS = [
-  { clave: 'cuerpo', catalogo: CUERPOS, etiqueta: 'Cuerpo', grupo: 'Plataforma' },
   { clave: 'cañon', catalogo: CAÑONES, etiqueta: 'Cañón', porDefecto: 'estandar', grupo: 'Plataforma' },
   { clave: 'cargador', catalogo: CARGADORES, etiqueta: 'Cargador', porDefecto: 'medio', grupo: 'Plataforma' },
-  { clave: 'mira', catalogo: MIRAS, etiqueta: 'Mira', porDefecto: 'ninguna', grupo: 'Accesorios' },
-  { clave: 'boca', catalogo: BOCAS, etiqueta: 'Boca de cañón', porDefecto: 'ninguna', grupo: 'Accesorios' },
-  { clave: 'empuñadura', catalogo: EMPUÑADURAS, etiqueta: 'Empuñadura inferior', porDefecto: 'ninguna', grupo: 'Accesorios' },
+  // los accesorios ya no van en un solo bloque genérico — se
+  // agrupan por dónde van de verdad en el arma: la mira se monta
+  // en el riel superior, la boca en la punta del cañón, la
+  // empuñadura cuelga por debajo. Así el HUD se lee más parecido
+  // a cómo se ve el arma real, no solo una lista plana.
+  { clave: 'mira', catalogo: MIRAS, etiqueta: 'Mira', porDefecto: 'ninguna', grupo: 'Riel superior' },
+  { clave: 'boca', catalogo: BOCAS, etiqueta: 'Boca de cañón', porDefecto: 'ninguna', grupo: 'Cañón y bajo cañón' },
+  { clave: 'empuñadura', catalogo: EMPUÑADURAS, etiqueta: 'Empuñadura inferior', porDefecto: 'ninguna', grupo: 'Cañón y bajo cañón' },
   { clave: 'gatillo', catalogo: GATILLOS, etiqueta: 'Gatillo', porDefecto: 'ninguno', grupo: 'Ajuste fino' },
   { clave: 'municion', catalogo: MUNICIONES, etiqueta: 'Munición', porDefecto: 'estandar', grupo: 'Ajuste fino' },
   { clave: 'acabado', catalogo: ACABADOS, etiqueta: 'Acabado', porDefecto: 'fabrica', grupo: 'Ajuste fino' },
@@ -103,13 +111,76 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
     };
   }
 
+  function crearRanura(etiqueta, valorTexto, contadorTexto, esVacio, onIzq, onDer) {
+    const ranura = document.createElement('div');
+    ranura.className = 'ranura' + (esVacio ? '' : ' ocupada');
+
+    const flechaIzq = document.createElement('button');
+    flechaIzq.className = 'flecha';
+    flechaIzq.textContent = '‹';
+    flechaIzq.onclick = (e) => { e.stopPropagation(); onIzq(); };
+
+    const datos = document.createElement('div');
+    datos.className = 'datos';
+    const cat_ = document.createElement('span');
+    cat_.className = 'cat';
+    cat_.textContent = etiqueta;
+    const val = document.createElement('span');
+    val.className = 'val' + (esVacio ? ' vacio' : '');
+    val.textContent = valorTexto;
+    const contador = document.createElement('span');
+    contador.className = 'contador';
+    contador.textContent = contadorTexto;
+    datos.append(cat_, val, contador);
+
+    const flechaDer = document.createElement('button');
+    flechaDer.className = 'flecha';
+    flechaDer.textContent = '›';
+    flechaDer.onclick = (e) => { e.stopPropagation(); onDer(); };
+
+    ranura.append(flechaIzq, datos, flechaDer);
+    return ranura;
+  }
+
   function renderizar() {
     contenido.innerHTML = '';
-    let grupoAnterior = null;
+
+    /* Clase + cuerpo, en dos niveles. Antes "Cuerpo" era una sola
+       lista plana de las 9 armas — con el catálogo creciendo, esa
+       fila de "‹ ... ›" se iba a volver interminable, y un PDW
+       quedaba mezclado en la misma lista que un subfusil, o un
+       revólver junto a una pistola automática, sin ninguna
+       relación visible entre ellos. Ahora primero eliges la CLASE
+       (Pistolas, Subfusiles, Fusiles de asalto...) y luego el
+       cuerpo específico dentro de esa clase — el mismo patrón que
+       cualquier armería real, y deja espacio para agregar más
+       cuerpos por clase (M4, AK-47, AR-15 dentro de "Fusiles de
+       asalto", por ejemplo) sin que la lista se vuelva un caos.  */
+    const encabezadoPlataforma = document.createElement('div');
+    encabezadoPlataforma.className = 'encabezado-col';
+    encabezadoPlataforma.textContent = 'Plataforma';
+    contenido.appendChild(encabezadoPlataforma);
+
+    const grupos = cuerposPorClase();
+    const claseActual = CUERPOS[seleccion.cuerpo].clase;
+    const cuerposDeLaClase = grupos[claseActual];
+
+    contenido.appendChild(crearRanura(
+      'Clase', claseActual,
+      `${ORDEN_CLASES.indexOf(claseActual) + 1} / ${ORDEN_CLASES.length}`,
+      false, () => cambiarClase(-1), () => cambiarClase(1),
+    ));
+    contenido.appendChild(crearRanura(
+      'Cuerpo', CUERPOS[seleccion.cuerpo].nombre.replace(/^Cuerpo de /, ''),
+      `${cuerposDeLaClase.indexOf(seleccion.cuerpo) + 1} / ${cuerposDeLaClase.length}`,
+      false, () => cambiarCuerpoEnClase(-1), () => cambiarCuerpoEnClase(1),
+    ));
+
+    let grupoAnterior = 'Plataforma';
     for (const cat of CATEGORIAS) {
       if (cat.grupo !== grupoAnterior) {
         const encabezado = document.createElement('div');
-        encabezado.className = 'encabezado-col' + (grupoAnterior === null ? '' : ' secundario');
+        encabezado.className = 'encabezado-col secundario';
         encabezado.textContent = cat.grupo;
         contenido.appendChild(encabezado);
         grupoAnterior = cat.grupo;
@@ -127,34 +198,12 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
       const pieza = cat.catalogo[seleccion[cat.clave]];
       const esVacio = /^(Sin |Ning)/i.test(pieza.nombre);
 
-      const ranura = document.createElement('div');
-      ranura.className = 'ranura' + (esVacio ? '' : ' ocupada');
-
-      const flechaIzq = document.createElement('button');
-      flechaIzq.className = 'flecha';
-      flechaIzq.textContent = '‹';
-      flechaIzq.onclick = (e) => { e.stopPropagation(); cambiar(cat, idxActual, claves, -1); };
-
-      const datos = document.createElement('div');
-      datos.className = 'datos';
-      const cat_ = document.createElement('span');
-      cat_.className = 'cat';
-      cat_.textContent = cat.etiqueta;
-      const val = document.createElement('span');
-      val.className = 'val' + (esVacio ? ' vacio' : '');
-      val.textContent = esVacio ? 'vacío' : pieza.nombre;
-      const contador = document.createElement('span');
-      contador.className = 'contador';
-      contador.textContent = `${idxEnCompatibles + 1} / ${clavesCompatibles.length}`;
-      datos.append(cat_, val, contador);
-
-      const flechaDer = document.createElement('button');
-      flechaDer.className = 'flecha';
-      flechaDer.textContent = '›';
-      flechaDer.onclick = (e) => { e.stopPropagation(); cambiar(cat, idxActual, claves, 1); };
-
-      ranura.append(flechaIzq, datos, flechaDer);
-      contenido.appendChild(ranura);
+      contenido.appendChild(crearRanura(
+        cat.etiqueta, esVacio ? 'vacío' : pieza.nombre,
+        `${idxEnCompatibles + 1} / ${clavesCompatibles.length}`, esVacio,
+        () => cambiar(cat, idxActual, claves, -1),
+        () => cambiar(cat, idxActual, claves, 1),
+      ));
     }
 
     // estadísticas en vivo — se recalculan con cada cambio
@@ -168,7 +217,9 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
     tipoArmaEl.textContent = `${stats.clasificacion} · ${CAÑONES[seleccion.cañon].nombre} · ${CUERPOS[seleccion.cuerpo].calibre}`;
 
     // peso del arma armada (solo esta, no el inventario completo)
-    const pesoArma = CATEGORIAS.reduce(
+    // — el cuerpo ya no vive en CATEGORIAS (ahora es la selección
+    // de clase/cuerpo aparte), así que su peso se suma a mano
+    const pesoArma = CUERPOS[seleccion.cuerpo].peso + CATEGORIAS.reduce(
       (t, c) => t + (c.catalogo[seleccion[c.clave]].peso || 0), 0
     );
     const PESO_REFERENCIA = 8;   // kg, para la escala de la barra
@@ -263,21 +314,9 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
     // barras, para ver de un vistazo qué mejoró y qué empeoró
     statsPrevias = ensamblarArma(piezasActuales());
 
-    if (cat.clave === 'cuerpo') {
-      // cambiar el cuerpo puede volver incompatibles otras piezas
-      // ya elegidas (un bípode no cabe en una pistola) — se
-      // reajustan solas a su valor por defecto, nunca se quedan
-      // con algo que ya no debería poder montarse
-      const nuevoIdx = (idxActual + direccion + claves.length) % claves.length;
-      seleccion.cuerpo = claves[nuevoIdx];
-      reajustarIncompatibles();
-      renderizar();
-      return;
-    }
-
-    // para cualquier otra categoría, salta las opciones que no
-    // sean compatibles con el cuerpo actual — nunca deja elegir
-    // algo que no cabría de verdad en esa arma
+    // para cualquier categoría, salta las opciones que no sean
+    // compatibles con el cuerpo actual — nunca deja elegir algo
+    // que no cabría de verdad en esa arma
     let idx = idxActual;
     for (let intentos = 0; intentos < claves.length; intentos++) {
       idx = (idx + direccion + claves.length) % claves.length;
@@ -287,9 +326,36 @@ export function crearBancoTrabajo({ posicionMesa, posicionExhibidor, radioIntera
     renderizar();
   }
 
+  /* Cambia de CLASE (Pistolas -> Subfusiles -> ...) — selecciona
+     el primer cuerpo de la clase nueva. Cambiar de clase, igual
+     que antes cambiar de cuerpo, puede volver incompatibles otras
+     piezas ya elegidas (un bípode no cabe en una pistola).       */
+  function cambiarClase(direccion) {
+    statsPrevias = ensamblarArma(piezasActuales());
+    const grupos = cuerposPorClase();
+    const claseActual = CUERPOS[seleccion.cuerpo].clase;
+    const idxClase = ORDEN_CLASES.indexOf(claseActual);
+    const nuevaClase = ORDEN_CLASES[(idxClase + direccion + ORDEN_CLASES.length) % ORDEN_CLASES.length];
+    seleccion.cuerpo = grupos[nuevaClase][0];
+    reajustarIncompatibles();
+    renderizar();
+  }
+
+  /* Cambia de CUERPO dentro de la misma clase (ej. entre subfusil
+     y PDW, sin salir de "Subfusiles").                            */
+  function cambiarCuerpoEnClase(direccion) {
+    statsPrevias = ensamblarArma(piezasActuales());
+    const grupos = cuerposPorClase();
+    const claseActual = CUERPOS[seleccion.cuerpo].clase;
+    const lista = grupos[claseActual];
+    const idx = lista.indexOf(seleccion.cuerpo);
+    seleccion.cuerpo = lista[(idx + direccion + lista.length) % lista.length];
+    reajustarIncompatibles();
+    renderizar();
+  }
+
   function reajustarIncompatibles() {
     for (const cat of CATEGORIAS) {
-      if (cat.clave === 'cuerpo') continue;
       if (!esPiezaCompatible(cat.clave, seleccion[cat.clave], seleccion.cuerpo)) {
         seleccion[cat.clave] = cat.porDefecto;
       }

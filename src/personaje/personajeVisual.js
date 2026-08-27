@@ -137,9 +137,22 @@ export function crearPersonajeVisual(scene) {
     meshes[nombre] = mesh;
   }
 
-  // La cabeza estaría literalmente alrededor de la cámara en primera
-  // persona. La ocultamos durante gameplay normal. En ragdoll sí aparece.
-  meshes.cabeza.visible = false;
+  /* Todo lo que queda demasiado cerca de la cámara en primera
+     persona se oculta durante el juego normal — el ragdoll sí lo
+     muestra completo (usa clones aparte, no estos meshes).
+     Antes solo se ocultaba la cabeza, pero medido: el PECHO queda
+     a solo 6cm de la cámara (dentro de los 10cm del plano near de
+     la cámara — se recortaba y se veía como si estuvieras dentro
+     del personaje) y los brazos superiores a 26cm — no llegan a
+     recortarse, pero tan cerca se ven enormes y distorsionados.
+     Es el mismo patrón de siempre: ocultar el torso/brazos y dejar
+     solo piernas visibles (para cuando miras hacia abajo) es el
+     estándar en shooters de primera persona — los brazos
+     sosteniendo el arma los pone el sistema de arma aparte.       */
+  const PARTES_OCULTAS_1RA_PERSONA = [
+    'cabeza', 'pecho', 'brazoSupIzq', 'brazoInfIzq', 'brazoSupDer', 'brazoInfDer',
+  ];
+  for (const nombre of PARTES_OCULTAS_1RA_PERSONA) meshes[nombre].visible = false;
 
   let tiempoPaso = 0;
   const eulerCamara = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -196,7 +209,7 @@ export function crearPersonajeVisual(scene) {
 
   function mostrarAnimado(visible) {
     grupo.visible = visible;
-    meshes.cabeza.visible = false;
+    for (const nombre of PARTES_OCULTAS_1RA_PERSONA) meshes[nombre].visible = false;
   }
 
   function obtenerPartesRagdoll() {

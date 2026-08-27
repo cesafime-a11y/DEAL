@@ -271,6 +271,18 @@ export function torneado(secciones, material, { segmentos = 20, abierto = false 
   const geo = new THREE.LatheGeometry(puntos, segmentos);
   // LatheGeometry gira sobre Y; el cañón va sobre Z
   geo.rotateX(Math.PI / 2);
+  /* Recalcular normales: LatheGeometry las genera con la asunción
+     de que el perfil solo AUMENTA de radio a partir de radio 0. En
+     un perfil real de cañón (perfilCañon) hay puntos donde el
+     radio VUELVE a bajar hasta 0 en la boca y en la recámara,
+     para cerrar los extremos. En esos "cierres", Three.js genera
+     las normales al revés — apuntando hacia adentro del sólido en
+     vez de hacia afuera. El resultado: las tapas se ven negras/
+     invisibles/"transparentes" (la luz les llega por atrás),
+     justo el bug que se veía en todos los cañones. computeVertex
+     Normals recalcula las normales desde la topología real, así
+     que quedan bien orientadas en todos lados.                    */
+  geo.computeVertexNormals();
   const mat = abierto
     ? material.clone()
     : material;

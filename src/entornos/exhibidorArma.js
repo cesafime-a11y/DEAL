@@ -46,6 +46,16 @@ export function crearExhibidorArma(scene, superficieMesa) {
   relleno.position.set(superficieMesa.x - 0.35, superficieMesa.y + 0.35, superficieMesa.z + 0.25);
   scene.add(relleno);
 
+  /* Luz de borde ("rim light"): un tercer punto detrás del arma,
+     con un tono cálido — perfila la silueta del arma contra la
+     mesa oscura, y es lo que en fotos de producto se ve como el
+     brillo dorado que separa el objeto del fondo. Sin esto, los
+     bordes del arma se fundían con el fondo del taller. Se prende
+     y apaga junto con el foco principal.                          */
+  const rim = new THREE.PointLight(0xffb96e, 0, 1.4, 2.2);
+  rim.position.set(superficieMesa.x + 0.3, superficieMesa.y + 0.18, superficieMesa.z - 0.35);
+  scene.add(rim);
+
   /* Reemplaza el arma tendida sobre la mesa — misma función que
      arma el modelo de verdad que traes en mano, así lo que ves
      aquí es EXACTO a lo que vas a llevarte al confirmar.        */
@@ -72,6 +82,7 @@ export function crearExhibidorArma(scene, superficieMesa) {
     tapete.visible = true;
     foco.intensity = 5.5;
     relleno.intensity = 1.4;
+    rim.intensity = 2.2;
   }
 
   /* Quita el arma de la mesa — se llama al cerrar el banco, para
@@ -86,6 +97,7 @@ export function crearExhibidorArma(scene, superficieMesa) {
     tapete.visible = false;
     foco.intensity = 0;
     relleno.intensity = 0;
+    rim.intensity = 0;
   }
 
   return { mostrarArma, ocultar };

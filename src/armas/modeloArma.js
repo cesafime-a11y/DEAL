@@ -26,9 +26,20 @@ import {
 } from './disenoArmas.js';
 import { ACABADOS } from './piezas.js';
 
-const MAT_METAL = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.4, metalness: 0.6 });
-const MAT_METAL_CLARO = new THREE.MeshStandardMaterial({ color: 0x3c3c40, roughness: 0.3, metalness: 0.75 });
-const MAT_GRIP = new THREE.MeshStandardMaterial({ color: 0x1c1b19, roughness: 0.85, metalness: 0.1 });
+/* Materiales base del arma. Se ajustaron a valores más realistas
+   de metal armado: antes MAT_METAL era casi sin brillo (roughness
+   0.4, metalness 0.6) y todo se veía del mismo tono oscuro sin
+   contraste — no había ninguna diferencia visible entre el
+   receptor y el guardamanos. Ahora el metal principal tiene menos
+   rugosidad (más brillo) y más metalness, para que la luz del
+   taller SÍ rebote y se vean los planos y biseles. El metal claro
+   (para monturas, tornillos, moldura) es más brillante todavía,
+   para leerse como acero pulido, no gris plano. Y el grip cambia
+   a un color un poco cálido (más negro-marrón, tipo polímero
+   real) para que se distinga del metal frío.                     */
+const MAT_METAL = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.32, metalness: 0.82 });
+const MAT_METAL_CLARO = new THREE.MeshStandardMaterial({ color: 0x51535a, roughness: 0.22, metalness: 0.9 });
+const MAT_GRIP = new THREE.MeshStandardMaterial({ color: 0x18140f, roughness: 0.88, metalness: 0.06 });
 /* Lentes: antes eran casi transparentes (opacidad 0.3-0.4), lo que
    en un fondo oscuro hacía que las miras se leyeran como si no
    tuvieran nada — se veía a través de ellas hasta desaparecer.
@@ -713,26 +724,72 @@ function cañonLargo() {
   const tubo = torneado(perfilCañon(longitud, radioBase), MAT_METAL, { segmentos: 18 });
   grupo.add(tubo);
 
-  /* El guardamanos: antes era una caja de tamaño Y posición FIJOS
-     (0.24m arrancando en z=-0.12), sin ninguna relación con
-     `longitud` ni con el radio real del cañón — literalmente
-     conservaba las medidas de un ajuste anterior, así que si
-     `longitud` o el radio cambiaban (como al agregar más variantes
-     de cañón), el guardamanos se quedaba corto/angosto o largo de
-     más y desalineado. Ahora se calcula a partir del cañón real:
-     cubre 65% de la longitud (arrancando justo después de la
-     recámara) y su grosor sigue el radio real del tubo — así
-     siempre queda bien pegado al cañón que en verdad tiene,
-     cualquiera que sea.                                          */
+  /* Guardamanos: era una caja lisa flotando alrededor del cañón, se
+     leía como una caja suelta abrazando el tubo, sin ninguna conexión
+     visual con el cuerpo del arma. Ahora es una silueta biselada,
+     con ventilación (los huecos característicos de cualquier
+     guardamanos AR/M-LOK de rifle real), un anillo delantero grueso
+     donde termina el guardamanos, y un anillo trasero (moldura) que
+     lo une al cuerpo del arma. Cubre 65% del cañón como antes; sus
+     medidas siguen calculadas desde `longitud` y `radioBase`, así
+     escala automáticamente si el cañón cambia de tamaño.           */
   const LARGO_GUARDAMANOS = longitud * 0.65;
   const anchoGuardamanos = radioBase * 2.6;
   const altoGuardamanos = radioBase * 2.35;
-  const guardamanos = new THREE.Mesh(
-    new THREE.BoxGeometry(anchoGuardamanos, altoGuardamanos, LARGO_GUARDAMANOS),
-    MAT_GRIP
-  );
-  guardamanos.position.set(0, -radioBase * 1.47, -0.02 - LARGO_GUARDAMANOS / 2);
+  const yGuarda = -radioBase * 1.47;
+  const zCentroGuarda = -0.02 - LARGO_GUARDAMANOS / 2;
+
+  // el cuerpo del guardamanos: un caja biselada leve, mucho mejor
+  // silueta que una caja recta
+  const guardamanos = cajaBiselada(anchoGuardamanos, altoGuardamanos, LARGO_GUARDAMANOS, MAT_GRIP, 0.004);
+  guardamanos.position.set(0, yGuarda, zCentroGuarda);
   grupo.add(guardamanos);
+
+  // ventilación M-LOK: dos filas de ranuras a los lados, muy típicas
+  // de un guardamanos moderno — sin esto se veía como un bloque
+  // liso, con esto se lee como accesorio de rifle real
+  const zsVent = [
+    zCentroGuarda - LARGO_GUARDAMANOS * 0.30,
+    zCentroGuarda - LARGO_GUARDAMANOS * 0.10,
+    zCentroGuarda + LARGO_GUARDAMANOS * 0.10,
+    zCentroGuarda + LARGO_GUARDAMANOS * 0.30,
+  ];
+  for (const z of zsVent) {
+    for (const signoX of [-1, 1]) {
+      const ventana = new THREE.Mesh(
+        new THREE.BoxGeometry(0.002, altoGuardamanos * 0.35, LARGO_GUARDAMANOS * 0.11),
+        MAT_LENTE_OSCURA,
+      );
+      ventana.position.set(signoX * (anchoGuardamanos / 2 + 0.0005), yGuarda, z);
+      grupo.add(ventana);
+    }
+  }
+
+  // anillo frontal grueso — el "capuchón" donde termina el
+  // guardamanos, típico de un rifle largo (M4, AK, etc.). Da un
+  // remate visual claro en vez de una cara plana pelada.
+  const anilloFrente = new THREE.Mesh(
+    new THREE.CylinderGeometry(radioBase * 1.55, radioBase * 1.55, 0.012, 12),
+    MAT_METAL_CLARO,
+  );
+  anilloFrente.rotation.x = Math.PI / 2;
+  anilloFrente.position.set(0, 0, zCentroGuarda - LARGO_GUARDAMANOS / 2 - 0.005);
+  grupo.add(anilloFrente);
+
+  // moldura de unión al cuerpo: el "collar" trasero — es lo que hace
+  // que el guardamanos ya no se lea como una caja suelta sino como
+  // parte del arma que enrosca en el receptor.
+  const collarUnion = new THREE.Mesh(
+    new THREE.CylinderGeometry(radioBase * 1.72, radioBase * 1.55, 0.017, 12),
+    MAT_METAL_CLARO,
+  );
+  collarUnion.rotation.x = Math.PI / 2;
+  collarUnion.position.set(0, 0, -0.017);
+  grupo.add(collarUnion);
+
+  // riel superior corto en el guardamanos — para poder montar
+  // accesorios al frente, típico de un guardamanos moderno
+  agregarRielSuperior(grupo, 0, altoGuardamanos / 2 + yGuarda + 0.002, zCentroGuarda - LARGO_GUARDAMANOS * 0.35, LARGO_GUARDAMANOS * 0.7);
 
   return { grupo, longitud, radioPunta: radioBase };
 }

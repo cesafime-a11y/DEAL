@@ -17,6 +17,7 @@
 export const CUERPOS = {
   pistola: {
     nombre: 'Cuerpo de pistola',
+    clase: 'Pistolas',
     calibre: '9mm',
     escalaCasquillo: 0.85,
     peso: 0.7,          // kg
@@ -26,6 +27,7 @@ export const CUERPOS = {
   },
   subfusil: {
     nombre: 'Cuerpo de subfusil',
+    clase: 'Subfusiles',
     calibre: '9mm',
     escalaCasquillo: 0.85,
     peso: 2.3,
@@ -35,6 +37,7 @@ export const CUERPOS = {
   },
   rifle: {
     nombre: 'Cuerpo de rifle',
+    clase: 'Fusiles de asalto',
     calibre: '5.56mm',
     escalaCasquillo: 1.15,
     peso: 3.2,
@@ -44,6 +47,7 @@ export const CUERPOS = {
   },
   escopeta: {
     nombre: 'Cuerpo de escopeta',
+    clase: 'Escopetas',
     calibre: 'Calibre 12',
     escalaCasquillo: 2.0,
     peso: 3.0,
@@ -59,6 +63,7 @@ export const CUERPOS = {
   },
   revolver: {
     nombre: 'Cuerpo de revólver',
+    clase: 'Pistolas',
     calibre: '.357 Magnum',
     escalaCasquillo: 1.0,
     peso: 0.9,
@@ -68,6 +73,7 @@ export const CUERPOS = {
   },
   automatica: {
     nombre: 'Cuerpo de pistola automática',
+    clase: 'Pistolas',
     calibre: '9mm',
     escalaCasquillo: 0.85,
     peso: 0.65,
@@ -77,6 +83,7 @@ export const CUERPOS = {
   },
   lmg: {
     nombre: 'Cuerpo de ametralladora ligera',
+    clase: 'Ametralladoras',
     calibre: '7.62mm',
     escalaCasquillo: 1.5,
     peso: 5.5,          // la más pesada del juego
@@ -86,6 +93,7 @@ export const CUERPOS = {
   },
   francotirador: {
     nombre: 'Cuerpo de francotirador',
+    clase: 'Francotiradores',
     calibre: '.308 Winchester',
     escalaCasquillo: 1.35,
     peso: 4.2,
@@ -101,6 +109,7 @@ export const CUERPOS = {
   // calibre real (5.7x28mm) es más chico y rápido, no más potente
   pdw: {
     nombre: 'Cuerpo de PDW',
+    clase: 'Subfusiles',
     calibre: '5.7x28mm',
     escalaCasquillo: 0.7,
     peso: 1.6,
@@ -295,4 +304,27 @@ export const COMPATIBILIDAD = {
 export function esPiezaCompatible(categoria, clave, cuerpoClave) {
   const restriccion = COMPATIBILIDAD[categoria]?.[clave];
   return !restriccion || restriccion.includes(cuerpoClave);
+}
+
+/* Orden de las clases de arma en el HUD — no es solo Object.keys()
+   de CUERPOS porque el orden ahí es de inserción por clave, y
+   queremos un orden que tenga sentido para el jugador (de más
+   ligera/corta distancia a más pesada/larga distancia), no el
+   orden en que se fueron agregando los cuerpos al catálogo.       */
+export const ORDEN_CLASES = [
+  'Pistolas', 'Subfusiles', 'Fusiles de asalto',
+  'Escopetas', 'Ametralladoras', 'Francotiradores',
+];
+
+/* Agrupa CUERPOS por su campo `clase`, respetando ORDEN_CLASES —
+   así el HUD arma dinámicamente "clase -> lista de cuerpos" sin
+   tener que mantener esa lista a mano cada vez que se agrega un
+   cuerpo nuevo.                                                   */
+export function cuerposPorClase() {
+  const grupos = {};
+  for (const clase of ORDEN_CLASES) grupos[clase] = [];
+  for (const [clave, datos] of Object.entries(CUERPOS)) {
+    (grupos[datos.clase] ??= []).push(clave);
+  }
+  return grupos;
 }
