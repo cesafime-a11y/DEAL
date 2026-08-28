@@ -1,25 +1,20 @@
 import * as THREE from 'three';
 
-
 import {
   crearMundo,
 } from './core/mundo.js';
-
 
 import {
   crearJugador,
 } from './core/jugador.js';
 
-
 import {
   crearArma,
 } from './armas/arma.js';
 
-
 import {
   ensamblarArma,
 } from './armas/ensamblar.js';
-
 
 import {
 
@@ -43,51 +38,41 @@ import {
 
 } from './armas/piezas.js';
 
-
 import {
   crearInventario,
 } from './armas/inventario.js';
-
 
 import {
   crearCielo,
 } from './graficos/cielo.js';
 
-
 import {
   crearAnimador,
 } from './graficos/animacion.js';
-
 
 import {
   crearEfectos,
 } from './graficos/efectos.js';
 
-
 import {
   crearTaller,
 } from './entornos/taller.js';
-
 
 import {
   crearCabina,
 } from './entornos/cabina.js';
 
-
 import {
   crearExhibidorArma,
 } from './entornos/exhibidorArma.js';
-
 
 import {
   crearBancoTrabajo,
 } from './ui/bancoTrabajo.js';
 
-
 import {
   crearHud,
 } from './ui/hud.js';
-
 
 import {
 
@@ -107,36 +92,27 @@ import {
 
 } from './audio/sfx.js';
 
-
 import {
   crearMundoFisico,
 } from './fisica/mundoFisico.js';
-
 
 import {
   crearPersonajeVisual,
 } from './personaje/personajeVisual.js';
 
-
 import {
   crearRagdoll,
 } from './personaje/ragdoll.js';
-
 
 import {
   crearBrazosFPS,
 } from './personaje/brazosFPS.js';
 
 
-import {
-  crearCuerpoFPS,
-} from './personaje/cuerpoFPS.js';
 
-
-
-/* ═════════════════════════════════
-   MUNDO / GRÁFICOS
-═════════════════════════════════ */
+/* ═══════════════════════════════════
+   MUNDO
+═══════════════════════════════════ */
 
 const {
 
@@ -145,6 +121,8 @@ const {
   camera,
 
   renderer,
+
+  sol,
 
   ALTURA_OJOS,
 
@@ -174,15 +152,32 @@ const {
   );
 
 
-configurarDireccionSol(
-  direccionSol
-);
+if (
+  configurarDireccionSol
+) {
+
+  configurarDireccionSol(
+    direccionSol
+  );
+}
+else if (
+  sol
+) {
+
+  sol.position
+    .copy(
+      direccionSol
+    )
+    .multiplyScalar(
+      60
+    );
+}
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    ENTORNOS
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const taller =
   crearTaller(
@@ -226,9 +221,9 @@ const meshesDisparables = [
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    JUGADOR
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const animador =
   crearAnimador();
@@ -255,40 +250,37 @@ const jugador =
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    PERSONAJE
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const personaje =
   crearPersonajeVisual(
-    scene
+
+    scene,
+
+    {
+      alturaOjos:
+        ALTURA_OJOS,
+    }
   );
 
 
 personaje.actualizar(
+
   camera,
+
   0,
-  0
-);
 
+  0,
 
-/*
-  V3.1
+  {
+    armado:
+      false,
 
-  AHORA EL CUERPO FPS
-  VIVE EN SCENE.
-
-  NO EN CAMERA.
-*/
-
-const cuerpoFPS =
-  crearCuerpoFPS(
-    scene
-  );
-
-
-cuerpoFPS.setVisible(
-  false
+    apuntando:
+      false,
+  }
 );
 
 
@@ -304,9 +296,9 @@ const ragdoll =
 
 
 
-/* ═════════════════════════════════
-   ENSAMBLAJE
-═════════════════════════════════ */
+/* ═══════════════════════════════════
+   ARMA
+═══════════════════════════════════ */
 
 function estadisticasDeSeleccion(
   seleccion
@@ -315,6 +307,7 @@ function estadisticasDeSeleccion(
   if (
     !seleccion
   ) {
+
     return null;
   }
 
@@ -421,15 +414,11 @@ const arma =
   );
 
 
-/*
-  Brazos V3.
-
-  Siguen siendo hijos
-  de arma.grupo.
-*/
 
 const brazosFPS =
   crearBrazosFPS(
+
+    camera,
 
     arma.grupo,
 
@@ -443,6 +432,43 @@ brazosFPS.actualizar({
 });
 
 
+
+/*
+  SOMBRA DEL ARMA RESTAURADA.
+*/
+
+function configurarSombrasArmaFPS() {
+
+  arma.grupo.traverse(
+
+    obj => {
+
+      if (
+        !obj.isMesh
+      ) {
+        return;
+      }
+
+
+      obj.castShadow =
+        true;
+
+
+      obj.receiveShadow =
+        false;
+
+
+      obj.frustumCulled =
+        false;
+    }
+  );
+}
+
+
+configurarSombrasArmaFPS();
+
+
+
 const inventario =
   crearInventario(
     seleccionInicial
@@ -454,9 +480,9 @@ const hud =
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    BANCO
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const exhibidor =
   crearExhibidorArma(
@@ -482,7 +508,9 @@ const banco =
     posicionMesa:
       posicionMesaJugador,
 
+
     posicionExhibidor:
+
       taller
         .superficieMesa
         .clone()
@@ -497,13 +525,17 @@ const banco =
           0.05
         ),
 
+
     radioInteraccion:
       2.2,
+
 
     controls:
       jugador.controls,
 
+
     camera,
+
 
     exhibidor,
 
@@ -525,19 +557,21 @@ const banco =
         );
 
 
-      arma
-        .actualizarArma(
+      arma.actualizarArma(
 
-          nuevasEstadisticas,
+        nuevasEstadisticas,
 
-          nuevaSeleccion
-        );
+        nuevaSeleccion
+      );
 
 
       brazosFPS
         .actualizarSeleccion(
           nuevaSeleccion
         );
+
+
+      configurarSombrasArmaFPS();
     },
   });
 
@@ -547,9 +581,9 @@ let cercaDeLaMesa =
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    MENÚ
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const menuPrincipal =
   document.getElementById(
@@ -565,6 +599,15 @@ const menuPausa =
 
 let juegoIniciado =
   false;
+
+
+let apuntando =
+  false;
+
+
+let gatilloPresionado =
+  false;
+
 
 
 const btnJugar =
@@ -603,6 +646,7 @@ btnJugar.onclick =
 
 btnReanudar.onclick =
   () =>
+
     jugador
       .controls
       .lock();
@@ -691,24 +735,15 @@ jugador.controls
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    MOUSE
-═════════════════════════════════ */
-
-let apuntando =
-  false;
-
-
-let gatilloPresionado =
-  false;
-
-
+═══════════════════════════════════ */
 
 document.addEventListener(
 
   'contextmenu',
 
-  (e) =>
+  e =>
     e.preventDefault()
 );
 
@@ -718,7 +753,7 @@ document.addEventListener(
 
   'mousedown',
 
-  (e) => {
+  e => {
 
     if (
 
@@ -734,12 +769,14 @@ document.addEventListener(
 
       ragdoll.activo
     ) {
+
       return;
     }
 
 
     if (
-      e.button === 0
+      e.button ===
+      0
     ) {
 
       gatilloPresionado =
@@ -748,7 +785,8 @@ document.addEventListener(
 
 
     if (
-      e.button === 2
+      e.button ===
+      2
     ) {
 
       apuntando =
@@ -763,10 +801,11 @@ document.addEventListener(
 
   'mouseup',
 
-  (e) => {
+  e => {
 
     if (
-      e.button === 0
+      e.button ===
+      0
     ) {
 
       gatilloPresionado =
@@ -775,7 +814,8 @@ document.addEventListener(
 
 
     if (
-      e.button === 2
+      e.button ===
+      2
     ) {
 
       apuntando =
@@ -786,43 +826,47 @@ document.addEventListener(
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    INVENTARIO
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const TECLAS_INVENTARIO = {
 
-  Digit1: 0,
+  Digit1:
+    0,
 
-  Digit2: 1,
+  Digit2:
+    1,
 
-  Digit3: 2,
+  Digit3:
+    2,
 
-  Digit4: 3,
+  Digit4:
+    3,
 
-  Digit5: 4,
+  Digit5:
+    4,
 
-  Digit6: 5,
+  Digit6:
+    5,
 
-  Digit7: 6,
+  Digit7:
+    6,
 
-  Digit8: 7,
+  Digit8:
+    7,
 };
 
 
-
-/* ═════════════════════════════════
-   TECLADO
-═════════════════════════════════ */
 
 document.addEventListener(
 
   'keydown',
 
-  (e) => {
+  e => {
 
 
-    /* RECARGAR */
+    /* RECARGA */
 
     if (
 
@@ -868,11 +912,15 @@ document.addEventListener(
           sel
 
             ? (
+
                 CARGADORES[
                   sel.cargador
                 ]
+
                 ?.peso
+
                 ??
+
                 0.2
               )
 
@@ -880,6 +928,7 @@ document.addEventListener(
         );
       }
     }
+
 
 
     /* BANCO */
@@ -908,6 +957,7 @@ document.addEventListener(
     }
 
 
+
     /* INSPECCIÓN */
 
     if (
@@ -934,6 +984,7 @@ document.addEventListener(
         true
       );
     }
+
 
 
     /* RAGDOLL */
@@ -983,15 +1034,14 @@ document.addEventListener(
         0.65;
 
 
-      ragdoll
-        .alternar({
+      ragdoll.alternar({
 
-          impulso:
-            direccion,
+        impulso:
+          direccion,
 
-          puntoImpulso:
-            'pecho',
-        });
+        puntoImpulso:
+          'pecho',
+      });
 
 
       const estado =
@@ -1009,12 +1059,6 @@ document.addEventListener(
         !ragdoll.activo;
 
 
-      cuerpoFPS
-        .setVisible(
-          fpsActivo
-        );
-
-
       brazosFPS
         .actualizar({
 
@@ -1029,16 +1073,13 @@ document.addEventListener(
         });
 
 
-      arma
-        .grupo
-        .visible =
+      arma.grupo.visible =
 
-          fpsActivo
+        fpsActivo
 
-          &&
+        &&
 
-          !estado
-            .sinArma;
+        !estado.sinArma;
     }
   }
 );
@@ -1049,7 +1090,7 @@ document.addEventListener(
 
   'keyup',
 
-  (e) => {
+  e => {
 
 
     if (
@@ -1093,30 +1134,32 @@ document.addEventListener(
           .armaActiva();
 
 
-      arma
-        .actualizarArma(
+      arma.actualizarArma(
 
-          estadisticasDeSeleccion(
-            seleccionActiva
-          ),
-
+        estadisticasDeSeleccion(
           seleccionActiva
-        );
+        ),
+
+        seleccionActiva
+      );
 
 
       brazosFPS
         .actualizarSeleccion(
           seleccionActiva
         );
+
+
+      configurarSombrasArmaFPS();
     }
   }
 );
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    DISPARO
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 const raycaster =
   new THREE.Raycaster();
@@ -1132,6 +1175,7 @@ function intentarDisparar() {
   if (
     ragdoll.activo
   ) {
+
     return;
   }
 
@@ -1178,6 +1222,7 @@ function intentarDisparar() {
   if (
     !seleccionActual
   ) {
+
     return;
   }
 
@@ -1208,30 +1253,26 @@ function intentarDisparar() {
     );
 
 
-  /*
-    NUEVO:
-    fogonazo visual.
-  */
+  efectos.destelloBoca?.(
 
-  efectos
-    .destelloBoca(
+    puntaCanon,
 
-      puntaCanon,
+    direccionArma,
 
-      direccionArma,
+    seleccionActual
+      .boca ===
+      'silenciador'
 
-      seleccionActual
-        .boca ===
-        'silenciador'
+      ? 0.20
 
-        ? 0.20
-
-        : 1.0
-    );
+      : 1
+  );
 
 
   for (
+
     const proyectil
+
     of disparo.proyectiles
   ) {
 
@@ -1358,8 +1399,10 @@ function intentarDisparar() {
 
       datosCuerpo
         ?.escalaCasquillo
-        ??
-        1,
+
+      ??
+
+      1,
 
       datosCuerpo
         ?.calibre ===
@@ -1386,9 +1429,9 @@ function intentarDisparar() {
 
 
 
-/* ═════════════════════════════════
+/* ═══════════════════════════════════
    LOOP
-═════════════════════════════════ */
+═══════════════════════════════════ */
 
 let distanciaCaminada =
   0;
@@ -1482,8 +1525,6 @@ function animar() {
       );
 
 
-  /* ARMA */
-
   if (
 
     !banco.abierto
@@ -1512,7 +1553,9 @@ function animar() {
   }
 
 
-  /* PERSONAJE */
+  const estadoArma =
+    arma.estado();
+
 
   if (
     !ragdoll.activo
@@ -1525,32 +1568,19 @@ function animar() {
 
         velocidad,
 
-        dt
-      );
+        dt,
 
+        {
 
-    /*
-      V3.1:
+          armado:
+            !estadoArma
+              .sinArma,
 
-      ahora recibe
-      la cámara porque
-      cuerpoFPS vive
-      EN EL MUNDO.
-    */
-
-    cuerpoFPS
-      .actualizar(
-
-        camera,
-
-        velocidad,
-
-        dt
+          apuntando,
+        }
       );
   }
 
-
-  /* FÍSICA */
 
   fisica
     .actualizar(
@@ -1562,20 +1592,9 @@ function animar() {
     .actualizar();
 
 
-  /*
-    SOMBRAS DINÁMICAS.
-
-    La cámara de sombra
-    sigue al jugador.
-  */
-
-  actualizarIluminacion(
+  actualizarIluminacion?.(
     camera.position
   );
-
-
-  const estadoArma =
-    arma.estado();
 
 
   const vistaFPSActiva =
@@ -1593,8 +1612,8 @@ function animar() {
     !ragdoll.activo;
 
 
-  cuerpoFPS
-    .setVisible(
+  personaje
+    .mostrarAnimado(
       vistaFPSActiva
     );
 
@@ -1613,16 +1632,14 @@ function animar() {
     });
 
 
-  arma
-    .grupo
-    .visible =
+  arma.grupo.visible =
 
-      vistaFPSActiva
+    vistaFPSActiva
 
-      &&
+    &&
 
-      !estadoArma
-        .sinArma;
+    !estadoArma
+      .sinArma;
 
 
   hud
@@ -1634,15 +1651,16 @@ function animar() {
     );
 
 
-  /* PASOS */
-
   if (
     vistaFPSActiva
   ) {
 
     distanciaCaminada +=
 
-      velocidad *
+      velocidad
+
+      *
+
       dt;
 
 
@@ -1662,9 +1680,7 @@ function animar() {
 
 
   renderer.render(
-
     scene,
-
     camera
   );
 }

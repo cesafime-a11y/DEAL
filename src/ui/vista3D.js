@@ -6,7 +6,7 @@
    inspeccionarla de verdad antes de confirmar.
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
-import { construirModeloArma, liberarModeloArma } from '../armas/modeloArma.js';
+import { construirModeloArma, liberarModeloArma } from '../armas/modeloArmaBase.js';
 
 export function crearVista3D(canvasEl) {
   const scene = new THREE.Scene();

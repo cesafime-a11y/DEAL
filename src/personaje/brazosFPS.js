@@ -1,25 +1,26 @@
-/* ── personaje/brazosFPS.js ─────────────────────────────────
-   DEAL — BRAZOS FPS V3
-──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
+
 import {
   cajaBiselada,
   perfilExtruido,
 } from '../armas/disenoArmas.js';
 
+
 const MAT_MANGA =
   new THREE.MeshStandardMaterial({
-    color: 0x293038,
+    color: 0x303741,
     roughness: 0.90,
     metalness: 0.01,
   });
 
+
 const MAT_MANGA_OSCURA =
   new THREE.MeshStandardMaterial({
-    color: 0x1e2329,
+    color: 0x232931,
     roughness: 0.94,
     metalness: 0.01,
   });
+
 
 const MAT_GUANTE =
   new THREE.MeshStandardMaterial({
@@ -28,12 +29,14 @@ const MAT_GUANTE =
     metalness: 0.04,
   });
 
+
 const MAT_GUANTE_PLACA =
   new THREE.MeshStandardMaterial({
     color: 0x252b32,
     roughness: 0.74,
     metalness: 0.12,
   });
+
 
 const MAT_COSTURA =
   new THREE.MeshStandardMaterial({
@@ -42,260 +45,193 @@ const MAT_COSTURA =
     metalness: 0.02,
   });
 
+
 const POSES = {
   pistola: {
     manoDer:
       [0.054, -0.096, 0.082],
 
-    codoDer:
-      [0.178, -0.274, 0.330],
-
-    hombroDer:
-      [0.286, -0.410, 0.585],
-
     manoIzq:
-      [-0.028, -0.098, 0.042],
-
-    codoIzq:
-      [-0.150, -0.254, 0.288],
-
-    hombroIzq:
-      [-0.250, -0.397, 0.557],
+      [-0.028, -0.098, 0.040],
 
     rotDer:
       [-0.16, 0.02, -0.06],
 
     rotIzq:
       [-0.13, 0.08, 0.13],
+
+    aperturaCodo:
+      0.090,
   },
+
 
   automatica: {
     manoDer:
       [0.054, -0.099, 0.084],
 
-    codoDer:
-      [0.182, -0.278, 0.337],
-
-    hombroDer:
-      [0.292, -0.414, 0.595],
-
     manoIzq:
-      [-0.030, -0.100, 0.035],
-
-    codoIzq:
-      [-0.154, -0.255, 0.282],
-
-    hombroIzq:
-      [-0.255, -0.400, 0.560],
+      [-0.030, -0.100, 0.034],
 
     rotDer:
       [-0.17, 0.02, -0.06],
 
     rotIzq:
       [-0.14, 0.08, 0.14],
+
+    aperturaCodo:
+      0.095,
   },
+
 
   revolver: {
     manoDer:
       [0.054, -0.097, 0.080],
 
-    codoDer:
-      [0.180, -0.278, 0.340],
-
-    hombroDer:
-      [0.290, -0.414, 0.595],
-
     manoIzq:
       [-0.030, -0.094, 0.018],
-
-    codoIzq:
-      [-0.158, -0.246, 0.276],
-
-    hombroIzq:
-      [-0.258, -0.396, 0.556],
 
     rotDer:
       [-0.16, 0.02, -0.05],
 
     rotIzq:
       [-0.11, 0.10, 0.11],
+
+    aperturaCodo:
+      0.095,
   },
+
 
   subfusil: {
     manoDer:
       [0.055, -0.103, 0.090],
 
-    codoDer:
-      [0.180, -0.286, 0.350],
-
-    hombroDer:
-      [0.295, -0.418, 0.606],
-
     manoIzq:
       [-0.044, -0.078, -0.105],
-
-    codoIzq:
-      [-0.160, -0.220, 0.202],
-
-    hombroIzq:
-      [-0.268, -0.388, 0.548],
 
     rotDer:
       [-0.17, 0.01, -0.06],
 
     rotIzq:
       [-0.20, 0.08, 0.16],
+
+    aperturaCodo:
+      0.105,
   },
+
 
   pdw: {
     manoDer:
       [0.055, -0.102, 0.088],
 
-    codoDer:
-      [0.180, -0.284, 0.348],
-
-    hombroDer:
-      [0.294, -0.416, 0.602],
-
     manoIzq:
       [-0.043, -0.074, -0.130],
-
-    codoIzq:
-      [-0.160, -0.214, 0.184],
-
-    hombroIzq:
-      [-0.270, -0.386, 0.542],
 
     rotDer:
       [-0.17, 0.01, -0.06],
 
     rotIzq:
       [-0.21, 0.07, 0.17],
+
+    aperturaCodo:
+      0.110,
   },
+
 
   rifle: {
     manoDer:
       [0.055, -0.108, 0.096],
 
-    codoDer:
-      [0.180, -0.294, 0.360],
-
-    hombroDer:
-      [0.300, -0.425, 0.625],
-
     manoIzq:
       [-0.046, -0.061, -0.225],
-
-    codoIzq:
-      [-0.160, -0.202, 0.116],
-
-    hombroIzq:
-      [-0.278, -0.382, 0.525],
 
     rotDer:
       [-0.18, 0.00, -0.06],
 
     rotIzq:
       [-0.22, 0.06, 0.18],
+
+    aperturaCodo:
+      0.115,
   },
+
 
   escopeta: {
     manoDer:
       [0.056, -0.110, 0.100],
 
-    codoDer:
-      [0.184, -0.300, 0.368],
-
-    hombroDer:
-      [0.304, -0.430, 0.630],
-
     manoIzq:
       [-0.048, -0.073, -0.245],
-
-    codoIzq:
-      [-0.164, -0.212, 0.098],
-
-    hombroIzq:
-      [-0.282, -0.386, 0.520],
 
     rotDer:
       [-0.18, 0.00, -0.06],
 
     rotIzq:
       [-0.24, 0.05, 0.20],
+
+    aperturaCodo:
+      0.120,
   },
+
 
   francotirador: {
     manoDer:
       [0.056, -0.108, 0.098],
 
-    codoDer:
-      [0.182, -0.296, 0.362],
-
-    hombroDer:
-      [0.300, -0.425, 0.624],
-
     manoIzq:
       [-0.048, -0.056, -0.255],
-
-    codoIzq:
-      [-0.164, -0.196, 0.090],
-
-    hombroIzq:
-      [-0.282, -0.378, 0.516],
 
     rotDer:
       [-0.18, 0.00, -0.06],
 
     rotIzq:
       [-0.23, 0.05, 0.18],
+
+    aperturaCodo:
+      0.115,
   },
+
 
   lmg: {
     manoDer:
       [0.057, -0.113, 0.102],
 
-    codoDer:
-      [0.190, -0.305, 0.375],
-
-    hombroDer:
-      [0.310, -0.435, 0.638],
-
     manoIzq:
       [-0.050, -0.074, -0.230],
-
-    codoIzq:
-      [-0.174, -0.222, 0.106],
-
-    hombroIzq:
-      [-0.292, -0.392, 0.530],
 
     rotDer:
       [-0.19, 0.00, -0.07],
 
     rotIzq:
       [-0.24, 0.05, 0.20],
+
+    aperturaCodo:
+      0.135,
   },
 };
 
-function v3(v) {
-  return new THREE.Vector3(...v);
-}
 
-function preparar(mesh) {
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.frustumCulled = false;
+function preparar(
+  mesh
+) {
+  mesh.castShadow =
+    false;
+
+  mesh.receiveShadow =
+    false;
+
+  mesh.frustumCulled =
+    false;
 
   return mesh;
 }
 
-function crearSegmentoConico({
+
+function crearSegmentoConico(
   radioInicio,
   radioFin,
   material,
-  nombre,
-}) {
+  nombre
+) {
   const mesh =
     new THREE.Mesh(
       new THREE.CylinderGeometry(
@@ -309,10 +245,14 @@ function crearSegmentoConico({
       material
     );
 
-  mesh.name = nombre;
+  mesh.name =
+    nombre;
 
-  return preparar(mesh);
+  return preparar(
+    mesh
+  );
 }
+
 
 function orientarSegmento(
   mesh,
@@ -320,7 +260,12 @@ function orientarSegmento(
   fin
 ) {
   const direccion =
-    fin.clone().sub(inicio);
+    fin
+      .clone()
+      .sub(
+        inicio
+      );
+
 
   const longitud =
     Math.max(
@@ -328,10 +273,18 @@ function orientarSegmento(
       direccion.length()
     );
 
+
   mesh.position
-    .copy(inicio)
-    .add(fin)
-    .multiplyScalar(0.5);
+    .copy(
+      inicio
+    )
+    .add(
+      fin
+    )
+    .multiplyScalar(
+      0.5
+    );
+
 
   mesh.quaternion
     .setFromUnitVectors(
@@ -346,134 +299,147 @@ function orientarSegmento(
         .normalize()
     );
 
-  mesh.scale.y =
-    longitud / 0.24;
+
+  mesh.scale.set(
+    1,
+    longitud / 0.24,
+    1
+  );
 }
 
-function crearFalange({
+
+function crearFalange(
   largo,
-  radio,
-  material = MAT_GUANTE,
-}) {
-  const mesh =
+  radio
+) {
+  return preparar(
     new THREE.Mesh(
       new THREE.CapsuleGeometry(
         radio,
 
         Math.max(
           0.003,
-          largo - radio * 2
+          largo -
+          radio * 2
         ),
 
         4,
+
         7
       ),
 
-      material
-    );
-
-  return preparar(mesh);
+      MAT_GUANTE
+    )
+  );
 }
 
-function crearDedo({
-  nombre,
-  largo1,
-  largo2,
-  radio,
-  separacionX,
-  tipo,
-}) {
+
+function crearDedo(
+  x,
+  gatillo = false
+) {
   const grupo =
     new THREE.Group();
 
-  grupo.name = nombre;
 
-  const falange1 =
-    crearFalange({
-      largo: largo1,
-      radio,
-    });
+  const f1 =
+    crearFalange(
+      0.036,
+      0.0062
+    );
 
-  const falange2 =
-    crearFalange({
-      largo: largo2,
-      radio:
-        radio * 0.90,
-    });
 
-  falange1.position.set(
-    separacionX,
-    0.031,
+  const f2 =
+    crearFalange(
+      0.028,
+      0.0057
+    );
+
+
+  f1.position.set(
+    x,
+    0.030,
     -0.026
   );
 
-  falange1.rotation.x =
-    tipo === 'gatillo'
+
+  f1.rotation.x =
+    gatillo
       ? 1.05
       : 0.88;
 
-  falange1.rotation.z =
-    separacionX * -1.2;
 
-  falange2.position.set(
-    separacionX,
-    0.019,
+  f2.position.set(
+    x,
+    0.018,
     -0.050
   );
 
-  falange2.rotation.x =
-    tipo === 'gatillo'
+
+  f2.rotation.x =
+    gatillo
       ? 1.30
       : 1.18;
 
-  falange2.rotation.z =
-    separacionX * -1.1;
 
   grupo.add(
-    falange1,
-    falange2
+    f1,
+    f2
   );
+
 
   return grupo;
 }
 
-function crearMano({
+
+function crearMano(
   nombre,
-  tipo = 'soporte',
-  espejo = 1,
-}) {
+  izquierda = false,
+  manoGatillo = false
+) {
   const grupo =
     new THREE.Group();
 
-  grupo.name = nombre;
 
-  const siluetaPalma = [
-    [-0.027, -0.038],
-    [ 0.010, -0.043],
-    [ 0.028, -0.026],
-    [ 0.031,  0.018],
-    [ 0.021,  0.039],
-    [-0.016,  0.043],
-    [-0.030,  0.020],
-  ];
+  grupo.name =
+    nombre;
+
 
   const palma =
     perfilExtruido(
-      siluetaPalma,
+      [
+        [-0.030, -0.039],
+        [ 0.012, -0.043],
+        [ 0.030, -0.025],
+        [ 0.031,  0.018],
+        [ 0.020,  0.041],
+        [-0.017,  0.044],
+        [-0.031,  0.020],
+      ],
+
       0.078,
+
       MAT_GUANTE,
+
       {
-        bisel: 0.006,
-        curvaBisel: 3,
+        bisel:
+          0.006,
+
+        curvaBisel:
+          3,
       }
     );
 
-  palma.name =
-    `${nombre}_palma`;
+
+  preparar(
+    palma
+  );
+
 
   grupo.add(
-    preparar(palma)
+    palma
   );
+
 
   const nudillera =
     cajaBiselada(
@@ -484,18 +450,27 @@ function crearMano({
       0.005
     );
 
+
   nudillera.position.set(
     0,
     0.030,
     -0.010
   );
 
+
   nudillera.rotation.x =
     -0.12;
 
-  grupo.add(
-    preparar(nudillera)
+
+  preparar(
+    nudillera
   );
+
+
+  grupo.add(
+    nudillera
+  );
+
 
   const cuff =
     cajaBiselada(
@@ -506,15 +481,23 @@ function crearMano({
       0.008
     );
 
+
   cuff.position.set(
     0,
     -0.055,
     0.005
   );
 
-  grupo.add(
-    preparar(cuff)
+
+  preparar(
+    cuff
   );
+
+
+  grupo.add(
+    cuff
+  );
+
 
   const cinta =
     cajaBiselada(
@@ -525,15 +508,29 @@ function crearMano({
       0.003
     );
 
+
   cinta.position.set(
     0,
     -0.058,
     0.005
   );
 
-  grupo.add(
-    preparar(cinta)
+
+  preparar(
+    cinta
   );
+
+
+  grupo.add(
+    cinta
+  );
+
+
+  const signo =
+    izquierda
+      ? -1
+      : 1;
+
 
   const xs = [
     -0.026,
@@ -542,144 +539,157 @@ function crearMano({
      0.026,
   ];
 
+
   for (
     let i = 0;
     i < 4;
     i++
   ) {
-    const esIndice =
-      tipo === 'gatillo' &&
-      i === 0;
+    grupo.add(
+      crearDedo(
+        xs[i] *
+          signo,
 
-    const dedo =
-      crearDedo({
-        nombre:
-          `${nombre}_dedo_${i}`,
-
-        largo1:
-          i === 0 ||
-          i === 3
-            ? 0.034
-            : 0.038,
-
-        largo2:
-          i === 0 ||
-          i === 3
-            ? 0.026
-            : 0.030,
-
-        radio: 0.0062,
-
-        separacionX:
-          xs[i] *
-          espejo,
-
-        tipo:
-          esIndice
-            ? 'gatillo'
-            : 'normal',
-      });
-
-    grupo.add(dedo);
+        manoGatillo &&
+          i === 0
+      )
+    );
   }
 
+
   const pulgar1 =
-    crearFalange({
-      largo: 0.038,
-      radio: 0.0075,
-    });
+    crearFalange(
+      0.038,
+      0.0075
+    );
+
 
   const pulgar2 =
-    crearFalange({
-      largo: 0.028,
-      radio: 0.0065,
-    });
+    crearFalange(
+      0.028,
+      0.0065
+    );
+
 
   pulgar1.position.set(
-    0.040 * espejo,
+    0.040 *
+      signo,
     -0.002,
     -0.002
   );
 
+
   pulgar1.rotation.z =
-    -0.78 * espejo;
+    -0.78 *
+    signo;
+
 
   pulgar1.rotation.x =
     0.46;
 
+
   pulgar2.position.set(
-    0.051 * espejo,
+    0.051 *
+      signo,
     -0.015,
     -0.018
   );
 
+
   pulgar2.rotation.z =
-    -0.94 * espejo;
+    -0.94 *
+    signo;
+
 
   pulgar2.rotation.x =
     0.72;
+
 
   grupo.add(
     pulgar1,
     pulgar2
   );
 
+
   return grupo;
 }
 
+
 export function crearBrazosFPS(
+  camera,
   grupoArma,
   seleccionInicial
 ) {
   const rig =
     new THREE.Group();
 
-  rig.name =
-    'BrazosFPS_V3';
 
-  grupoArma.add(rig);
+  rig.name =
+    'BrazosFPS_V4';
+
+
+  camera.add(
+    rig
+  );
+
+
+  const HOMBRO_DER =
+    new THREE.Vector3(
+      0.215,
+      -0.245,
+      0.105
+    );
+
+
+  const HOMBRO_IZQ =
+    new THREE.Vector3(
+      -0.215,
+      -0.245,
+      0.105
+    );
+
 
   const brazoSupDer =
-    crearSegmentoConico({
-      radioInicio: 0.070,
-      radioFin: 0.061,
-      material: MAT_MANGA,
-      nombre:
-        'FPS_brazoSupDer',
-    });
+    crearSegmentoConico(
+      0.068,
+      0.058,
+      MAT_MANGA,
+      'FPS_brazoSupDer_V4'
+    );
+
 
   const antebrazoDer =
-    crearSegmentoConico({
-      radioInicio: 0.061,
-      radioFin: 0.047,
-      material: MAT_MANGA,
-      nombre:
-        'FPS_antebrazoDer',
-    });
+    crearSegmentoConico(
+      0.058,
+      0.045,
+      MAT_MANGA_OSCURA,
+      'FPS_antebrazoDer_V4'
+    );
+
 
   const brazoSupIzq =
-    crearSegmentoConico({
-      radioInicio: 0.070,
-      radioFin: 0.061,
-      material: MAT_MANGA,
-      nombre:
-        'FPS_brazoSupIzq',
-    });
+    crearSegmentoConico(
+      0.068,
+      0.058,
+      MAT_MANGA,
+      'FPS_brazoSupIzq_V4'
+    );
+
 
   const antebrazoIzq =
-    crearSegmentoConico({
-      radioInicio: 0.061,
-      radioFin: 0.047,
-      material: MAT_MANGA,
-      nombre:
-        'FPS_antebrazoIzq',
-    });
+    crearSegmentoConico(
+      0.058,
+      0.045,
+      MAT_MANGA_OSCURA,
+      'FPS_antebrazoIzq_V4'
+    );
+
 
   const codoDer =
     preparar(
       new THREE.Mesh(
         new THREE.SphereGeometry(
-          0.050,
+          0.047,
           12,
           8
         ),
@@ -688,129 +698,109 @@ export function crearBrazosFPS(
       )
     );
 
+
   const codoIzq =
-    codoDer.clone();
+    preparar(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(
+          0.047,
+          12,
+          8
+        ),
+
+        MAT_MANGA_OSCURA
+      )
+    );
+
 
   const manoDer =
-    crearMano({
-      nombre:
-        'FPS_manoDerecha',
+    crearMano(
+      'FPS_manoDerecha_V4',
+      false,
+      true
+    );
 
-      tipo:
-        'gatillo',
-
-      espejo: 1,
-    });
 
   const manoIzq =
-    crearMano({
-      nombre:
-        'FPS_manoIzquierda',
+    crearMano(
+      'FPS_manoIzquierda_V4',
+      true,
+      false
+    );
 
-      tipo:
-        'soporte',
-
-      espejo: -1,
-    });
 
   rig.add(
     brazoSupDer,
     antebrazoDer,
-
     brazoSupIzq,
     antebrazoIzq,
-
     codoDer,
     codoIzq,
-
     manoDer,
     manoIzq
   );
 
+
   let seleccion =
     seleccionInicial;
 
+
+  const manoDerLocalArma =
+    new THREE.Vector3();
+
+
+  const manoIzqLocalArma =
+    new THREE.Vector3();
+
+
+  const manoDerCamara =
+    new THREE.Vector3();
+
+
+  const manoIzqCamara =
+    new THREE.Vector3();
+
+
+  const codoDerPos =
+    new THREE.Vector3();
+
+
+  const codoIzqPos =
+    new THREE.Vector3();
+
+
+  const rotLocalDer =
+    new THREE.Quaternion();
+
+
+  const rotLocalIzq =
+    new THREE.Quaternion();
+
+
+  const rotFinalDer =
+    new THREE.Quaternion();
+
+
+  const rotFinalIzq =
+    new THREE.Quaternion();
+
+
+  const eulerTemp =
+    new THREE.Euler();
+
+
   function poseActual() {
-    const cuerpo =
+    const clave =
       seleccion?.cuerpo ??
       'pistola';
 
+
     return (
-      POSES[cuerpo] ??
+      POSES[clave] ??
       POSES.rifle
     );
   }
 
-  function aplicarPose() {
-    const pose =
-      poseActual();
-
-    const manoD =
-      v3(pose.manoDer);
-
-    const codoD =
-      v3(pose.codoDer);
-
-    const hombroD =
-      v3(pose.hombroDer);
-
-    const manoI =
-      v3(pose.manoIzq);
-
-    const codoI =
-      v3(pose.codoIzq);
-
-    const hombroI =
-      v3(pose.hombroIzq);
-
-    orientarSegmento(
-      brazoSupDer,
-      hombroD,
-      codoD
-    );
-
-    orientarSegmento(
-      antebrazoDer,
-      codoD,
-      manoD
-    );
-
-    orientarSegmento(
-      brazoSupIzq,
-      hombroI,
-      codoI
-    );
-
-    orientarSegmento(
-      antebrazoIzq,
-      codoI,
-      manoI
-    );
-
-    codoDer.position.copy(
-      codoD
-    );
-
-    codoIzq.position.copy(
-      codoI
-    );
-
-    manoDer.position.copy(
-      manoD
-    );
-
-    manoIzq.position.copy(
-      manoI
-    );
-
-    manoDer.rotation.set(
-      ...pose.rotDer
-    );
-
-    manoIzq.rotation.set(
-      ...pose.rotIzq
-    );
-  }
 
   function actualizarSeleccion(
     nuevaSeleccion
@@ -818,26 +808,214 @@ export function crearBrazosFPS(
     seleccion =
       nuevaSeleccion;
 
+
     rig.visible =
       Boolean(
         nuevaSeleccion
       );
-
-    if (nuevaSeleccion) {
-      aplicarPose();
-    }
   }
+
 
   function actualizar({
     visible = true,
   } = {}) {
     rig.visible =
       visible &&
-      Boolean(seleccion);
+      Boolean(
+        seleccion
+      );
+
+
+    if (
+      !rig.visible
+    ) {
+      return;
+    }
+
+
+    const pose =
+      poseActual();
+
+
+    grupoArma.updateMatrix();
+
+
+    manoDerLocalArma
+      .fromArray(
+        pose.manoDer
+      );
+
+
+    manoIzqLocalArma
+      .fromArray(
+        pose.manoIzq
+      );
+
+
+    manoDerCamara
+      .copy(
+        manoDerLocalArma
+      )
+      .applyMatrix4(
+        grupoArma.matrix
+      );
+
+
+    manoIzqCamara
+      .copy(
+        manoIzqLocalArma
+      )
+      .applyMatrix4(
+        grupoArma.matrix
+      );
+
+
+    codoDerPos
+      .copy(
+        HOMBRO_DER
+      )
+      .lerp(
+        manoDerCamara,
+        0.54
+      );
+
+
+    codoDerPos.x +=
+      pose.aperturaCodo;
+
+
+    codoDerPos.y -=
+      0.045;
+
+
+    codoDerPos.z +=
+      0.025;
+
+
+    codoIzqPos
+      .copy(
+        HOMBRO_IZQ
+      )
+      .lerp(
+        manoIzqCamara,
+        0.54
+      );
+
+
+    codoIzqPos.x -=
+      pose.aperturaCodo;
+
+
+    codoIzqPos.y -=
+      0.045;
+
+
+    codoIzqPos.z +=
+      0.025;
+
+
+    orientarSegmento(
+      brazoSupDer,
+      HOMBRO_DER,
+      codoDerPos
+    );
+
+
+    orientarSegmento(
+      antebrazoDer,
+      codoDerPos,
+      manoDerCamara
+    );
+
+
+    orientarSegmento(
+      brazoSupIzq,
+      HOMBRO_IZQ,
+      codoIzqPos
+    );
+
+
+    orientarSegmento(
+      antebrazoIzq,
+      codoIzqPos,
+      manoIzqCamara
+    );
+
+
+    codoDer.position.copy(
+      codoDerPos
+    );
+
+
+    codoIzq.position.copy(
+      codoIzqPos
+    );
+
+
+    manoDer.position.copy(
+      manoDerCamara
+    );
+
+
+    manoIzq.position.copy(
+      manoIzqCamara
+    );
+
+
+    eulerTemp.set(
+      ...pose.rotDer
+    );
+
+
+    rotLocalDer.setFromEuler(
+      eulerTemp
+    );
+
+
+    rotFinalDer
+      .copy(
+        grupoArma.quaternion
+      )
+      .multiply(
+        rotLocalDer
+      );
+
+
+    manoDer.quaternion.copy(
+      rotFinalDer
+    );
+
+
+    eulerTemp.set(
+      ...pose.rotIzq
+    );
+
+
+    rotLocalIzq.setFromEuler(
+      eulerTemp
+    );
+
+
+    rotFinalIzq
+      .copy(
+        grupoArma.quaternion
+      )
+      .multiply(
+        rotLocalIzq
+      );
+
+
+    manoIzq.quaternion.copy(
+      rotFinalIzq
+    );
   }
 
+
   function destruir() {
-    grupoArma.remove(rig);
+    camera.remove(
+      rig
+    );
+
 
     rig.traverse(
       (obj) => {
@@ -847,12 +1025,15 @@ export function crearBrazosFPS(
     );
   }
 
-  aplicarPose();
 
   return {
-    grupo: rig,
+    grupo:
+      rig,
+
     actualizar,
+
     actualizarSeleccion,
+
     destruir,
   };
 }

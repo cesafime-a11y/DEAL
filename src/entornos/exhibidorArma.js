@@ -8,7 +8,7 @@
    una cámara de vista previa.
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
-import { construirModeloArma, liberarModeloArma } from '../armas/modeloArma.js';
+import { construirModeloArma, liberarModeloArma } from '../armas/modeloArmaBase.js';
 
 export function crearExhibidorArma(scene, superficieMesa) {
   let modeloActual = null;

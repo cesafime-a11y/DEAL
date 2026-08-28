@@ -13,7 +13,7 @@
 ──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
 import { Easing } from '../graficos/animacion.js';
-import { construirModeloArma, liberarModeloArma } from './modeloArma.js';
+import { construirModeloArma, liberarModeloArma } from './modeloArmaBase.js';
 
 const _arribaRef = new THREE.Vector3();
 const _derecha = new THREE.Vector3();

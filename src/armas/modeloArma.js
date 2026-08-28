@@ -1,1713 +1,4941 @@
-/* ── armas/modeloArma.js ───────────────────────────────────
-   Construye el modelo 3D del arma A PARTIR de las piezas
-   elegidas. Cada categoría tiene su propia fábrica de
-   geometría, independiente de las demás. El cuerpo define
-   CUATRO puntos de anclaje (cañón, cargador, mira, empuñadura
-   inferior) — cualquier combinación encaja sin piezas flotando
-   o enterradas unas en otras.
-
-   El acabado es un caso especial: los materiales metálicos
-   (MAT_METAL, MAT_METAL_CLARO) se COMPARTEN entre todas las
-   armas del juego para no crear cientos de instancias. Si
-   coloreáramos ese material compartido directamente, cambiaría
-   el color de TODAS las armas a la vez, no solo la que estás
-   armando — por eso, cuando el acabado no es el de fábrica, se
-   clonan y recolorean solo los materiales DE ESTE modelo en
-   particular (ver aplicarAcabado, al final).
-
-   Todo son primitivas — mismo lenguaje visual que el resto del
-   juego, nada de texturas ni modelos importados.
-──────────────────────────────────────────────────────────── */
 import * as THREE from 'three';
+
 import {
-  perfilExtruido, torneado, cajaBiselada, perfilSilenciador,
-  siluetaReceptor, siluetaEmpuñadura, perfilCañon,
-  texturaAgarre as texturaAgarreDiseno,
+  construirModeloArma as construirModeloBase,
+  liberarModeloArma as liberarModeloBase,
+} from './modeloArmaBase.js';
+
+import {
+  cajaBiselada,
+  perfilExtruido,
+  torneado,
+  texturaAgarre,
 } from './disenoArmas.js';
-import { ACABADOS } from './piezas.js';
 
-/* Materiales base del arma. Se ajustaron a valores más realistas
-   de metal armado: antes MAT_METAL era casi sin brillo (roughness
-   0.4, metalness 0.6) y todo se veía del mismo tono oscuro sin
-   contraste — no había ninguna diferencia visible entre el
-   receptor y el guardamanos. Ahora el metal principal tiene menos
-   rugosidad (más brillo) y más metalness, para que la luz del
-   taller SÍ rebote y se vean los planos y biseles. El metal claro
-   (para monturas, tornillos, moldura) es más brillante todavía,
-   para leerse como acero pulido, no gris plano. Y el grip cambia
-   a un color un poco cálido (más negro-marrón, tipo polímero
-   real) para que se distinga del metal frío.                     */
-const MAT_METAL = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.32, metalness: 0.82 });
-const MAT_METAL_CLARO = new THREE.MeshStandardMaterial({ color: 0x51535a, roughness: 0.22, metalness: 0.9 });
-const MAT_GRIP = new THREE.MeshStandardMaterial({ color: 0x18140f, roughness: 0.88, metalness: 0.06 });
-/* Lentes: antes eran casi transparentes (opacidad 0.3-0.4), lo que
-   en un fondo oscuro hacía que las miras se leyeran como si no
-   tuvieran nada — se veía a través de ellas hasta desaparecer.
-   Ahora tienen cuerpo real y brillo propio, que es lo que hace que
-   una óptica se distinga de un tubo vacío. Siguen dejando pasar
-   algo de luz, pero ya se ven.                                    */
-const MAT_LENTE_ROJA = new THREE.MeshBasicMaterial({ color: 0xff4433, transparent: true, opacity: 0.82 });
-const MAT_LENTE_ESCOPE = new THREE.MeshBasicMaterial({ color: 0x6ba8e8, transparent: true, opacity: 0.78 });
-const MAT_LENTE_FRONTAL = new THREE.MeshBasicMaterial({ color: 0x2a4a70, transparent: true, opacity: 0.7 });
-/* La retícula — la cruz que ves al apuntar. Antes no existía como
-   pieza: parte de que la mira "no tuviera nada" era justamente que
-   no había ninguna marca dentro del lente.                        */
-const MAT_RETICULA = new THREE.MeshBasicMaterial({ color: 0x101418 });
-/* Para tubos de mira: SIN tapas (openEnded) para poder ver a través,
-   pero con las dos caras visibles — así desde fuera el tubo se ve
-   macizo y desde dentro el camino está despejado. Un cilindro
-   cerrado normal tiene tapas circulares que, con el tubo apuntando
-   hacia adelante, quedaban justo tapando por donde miras.        */
-const MAT_TUBO = new THREE.MeshStandardMaterial({
-  color: 0x2f2f33, roughness: 0.5, metalness: 0.8, side: THREE.DoubleSide,
-});
-const MAT_PUNTO_ROJO = new THREE.MeshBasicMaterial({ color: 0xff2a18 });
-const MAT_LENTE_OSCURA = new THREE.MeshBasicMaterial({ color: 0x0c1220 });   // opaco a propósito — ventanas de expulsión y el emisor del láser, NUNCA se mira a través de estos
 
-/* ── funciones de detalle reutilizables ──────────────────────
-   Pequeños generadores que agregan remaches, líneas de panel, y
-   textura de riel — se aplican a los 8 cuerpos de forma
-   consistente, así el esfuerzo rinde en todas partes en vez de
-   rediseñar cada arma a mano por separado. Es lo que hace que
-   se lean como piezas fabricadas, no cajas lisas.               */
+/* ═══════════════════════════════════
+   MATERIALES
+═══════════════════════════════════ */
 
-function agregarRemaches(grupo, posiciones, material = MAT_METAL_CLARO) {
-  for (const [x, y, z] of posiciones) {
-    const remache = new THREE.Mesh(new THREE.SphereGeometry(0.0025, 6, 5), material);
-    remache.position.set(x, y, z);
-    grupo.add(remache);
-  }
-}
+const MAT_METAL =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x202328,
 
-function agregarLineaPanel(grupo, x, y, z, longitud, ejeZ = true) {
-  const geo = ejeZ
-    ? new THREE.BoxGeometry(0.0012, 0.002, longitud)
-    : new THREE.BoxGeometry(longitud, 0.002, 0.0012);
-  const linea = new THREE.Mesh(geo, MAT_LENTE_OSCURA);
-  linea.position.set(x, y, z);
-  grupo.add(linea);
-}
+    roughness:
+      0.30,
 
-/* Una fila de crestas delgadas, estilo riel picatinny — donde
-   antes había una superficie lisa arriba del cuerpo. Va justo
-   donde se monta la mira, así conecta visualmente con lo que
-   representa: el riel real de donde cuelga el accesorio.       */
-function agregarRielSuperior(grupo, x, yTope, zInicio, zFin, material = MAT_METAL_CLARO) {
-  const longitud = Math.abs(zFin - zInicio);
-  const numCrestas = Math.max(3, Math.round(longitud / 0.013));
-  const paso = longitud / numCrestas;
-  const signo = zFin >= zInicio ? 1 : -1;
-  for (let i = 0; i < numCrestas; i++) {
-    const z = zInicio + signo * (i + 0.5) * paso;
-    const cresta = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.004, Math.max(0.006, paso * 0.55)), material);
-    cresta.position.set(x, yTope + 0.002, z);
-    grupo.add(cresta);
-  }
-}
+    metalness:
+      0.88,
+  });
 
-/* El arco que rodea el gatillo. Ninguna arma lo tenía, y es de
-   las piezas más reconocibles de un arma real — su ausencia era
-   parte de lo que las hacía leerse como bloques geométricos.
-   Se arma con segmentos rectos siguiendo una curva, en vez de
-   con un toro completo, para poder abrirlo por arriba (donde se
-   une al cuerpo) y que el dedo "entre" de verdad.               */
-function agregarGuardamonte(grupo, x, y, z, radio = 0.022, material = MAT_METAL) {
-  const SEGMENTOS = 7;
-  const anguloInicio = Math.PI * 0.05;
-  const anguloFin = Math.PI * 0.95;
-  for (let i = 0; i < SEGMENTOS; i++) {
-    const a1 = anguloInicio + (anguloFin - anguloInicio) * (i / SEGMENTOS);
-    const a2 = anguloInicio + (anguloFin - anguloInicio) * ((i + 1) / SEGMENTOS);
-    const z1 = z + Math.cos(a1) * radio, y1 = y - Math.sin(a1) * radio;
-    const z2 = z + Math.cos(a2) * radio, y2 = y - Math.sin(a2) * radio;
-    const largo = Math.hypot(z2 - z1, y2 - y1);
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.007, 0.005, largo * 1.15), material);
-    seg.position.set(x, (y1 + y2) / 2, (z1 + z2) / 2);
-    seg.rotation.x = -Math.atan2(y2 - y1, z2 - z1);
-    grupo.add(seg);
-  }
-}
 
-/* ── cuerpos ─────────────────────────────────────────────── */
+const MAT_METAL_2 =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x3f454d,
 
-function cuerpoPistola() {
-  const grupo = new THREE.Group();
-  const LARGO = 0.19, ALTO = 0.10, ANCHO = 0.075;
+    roughness:
+      0.24,
 
-  /* Receptor a partir de una SILUETA, no de una caja: la pistola
-     tiene corredera arriba y marco abajo, con un escalón lateral
-     característico. Extruido con bisel, así los cantos están
-     matados en vez de ser aristas vivas de cubo.                */
-  const receptor = perfilExtruido(
-    siluetaReceptor('pistola', LARGO, ALTO), ANCHO, MAT_METAL, { bisel: 0.0035 }
-  );
-  grupo.add(receptor);
+    metalness:
+      0.92,
+  });
 
-  // corredera: pieza propia encima, con su corte de alivio — es lo
-  // que de verdad distingue una pistola vista de lado
-  const corredera = cajaBiselada(ANCHO * 0.92, 0.028, LARGO * 0.88, MAT_METAL_CLARO, 0.004);
-  corredera.position.set(0, ALTO / 2 - 0.006, -0.006);
-  grupo.add(corredera);
 
-  // estrías de amartillado en la parte trasera de la corredera
-  for (let i = 0; i < 6; i++) {
-    const estria = new THREE.Mesh(new THREE.BoxGeometry(ANCHO * 0.94, 0.016, 0.0035), MAT_METAL);
-    estria.position.set(0, ALTO / 2 - 0.008, 0.052 + i * 0.008);
-    grupo.add(estria);
-  }
+const MAT_ACERO =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x707781,
 
-  agregarRielSuperior(grupo, 0, 0.05, -0.075, 0.03);
-  agregarLineaPanel(grupo, 0.0376, -0.012, -0.04, 0.09);
-  agregarLineaPanel(grupo, -0.0376, -0.012, -0.04, 0.09);
+    roughness:
+      0.22,
 
-  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.019, 0.045), MAT_LENTE_OSCURA);
-  ventanaExpulsion.position.set(0.032, 0.026, -0.008);
-  grupo.add(ventanaExpulsion);
+    metalness:
+      0.94,
+  });
 
-  /* Empuñadura con silueta propia: panza al frente y talón más
-     ancho abajo, en vez de un prisma inclinado.                 */
-  const grip = perfilExtruido(
-    siluetaEmpuñadura(0.13, 0.062), 0.052, MAT_GRIP, { bisel: 0.004 }
-  );
-  grip.position.set(0, -0.10, 0.055);
-  grip.rotation.x = 0.22;
-  grupo.add(grip);
 
-  // cachas texturizadas a los lados de la empuñadura
-  for (const lado of [-1, 1]) {
-    const cacha = new THREE.Group();
-    texturaAgarreDiseno(cacha, {
-      x: lado * 0.027, y: 0, z: 0,
-      ancho: 0.045, alto: 0.075, filas: 5, columnas: 4,
-    });
-    cacha.position.set(0, -0.10, 0.055);
-    cacha.rotation.x = 0.22;
-    grupo.add(cacha);
-  }
+const MAT_POLIMERO =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x181b20,
 
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.026, 0.008), MAT_METAL_CLARO);
-  gatillo.position.set(0, -0.045, 0.01);
-  gatillo.rotation.x = -0.15;
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.032, 0.01, 0.021);
+    roughness:
+      0.89,
 
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.01, -0.095),
-    puntoCargador: new THREE.Vector3(0, -0.16, 0.06),
-    puntoMira: new THREE.Vector3(0, 0.058, -0.02),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.048, -0.05),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
+    metalness:
+      0.05,
+  });
 
-function cuerpoSubfusil() {
-  const grupo = new THREE.Group();
 
-  const receptor = perfilExtruido(
-    siluetaReceptor('compacto', 0.27, 0.115), 0.09, MAT_METAL, { bisel: 0.0035 }
-  );
-  grupo.add(receptor);
-  // tapa superior del receptor, pieza aparte con su propio canto
-  const tapa = cajaBiselada(0.084, 0.014, 0.20, MAT_METAL_CLARO, 0.003);
-  tapa.position.set(0, 0.0545, -0.01);
-  grupo.add(tapa);
+const MAT_GOMA =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x0f1114,
 
-  agregarRielSuperior(grupo, 0, 0.0575, -0.11, 0.09);
-  agregarRemaches(grupo, [
-    [0.04, 0.055, -0.12], [-0.04, 0.055, -0.12],
-    [0.04, 0.055, 0.1], [-0.04, 0.055, 0.1],
-  ]);
-  agregarLineaPanel(grupo, 0.0451, 0, -0.07, 0.14);
-  agregarLineaPanel(grupo, -0.0451, 0, -0.07, 0.14);
+    roughness:
+      0.98,
 
-  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.026, 0.07), MAT_LENTE_OSCURA);
-  ventanaExpulsion.position.set(0.043, 0.022, -0.02);
-  grupo.add(ventanaExpulsion);
+    metalness:
+      0.01,
+  });
 
-  const grip = perfilExtruido(siluetaEmpuñadura(0.14, 0.06), 0.06, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.11, 0.06);
-  grip.rotation.x = 0.2;
-  grupo.add(grip);
 
-  // culata corta, plegada — más ancho de cuerpo, más presencia que la pistola
-  /* Recorrida 14cm más atrás de su posición original: con el grip
-     dominando el empuje de seguridad (correcto — tu mano SÍ debe
-     quedar lejos de la cámara), esta culata terminaba jalada hasta
-     4-7cm DELANTE de la cámara — visible y dentro de la zona de
-     recorte, en vez de detrás de tu cabeza como debe ser. Pero
-     alejarla sin más dejaba un hueco de 13cm flotando en el aire
-     (se veía como una caja separada, suelta) — el tubo télescopico
-     de abajo es lo que la conecta de verdad al cuerpo.            */
-  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.176, 10), MAT_METAL_CLARO);
-  tuboCulata.rotation.x = Math.PI / 2;
-  tuboCulata.position.set(0, -0.01, 0.227);
-  tuboCulata.userData.esCulata = true;
-  grupo.add(tuboCulata);
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.09), MAT_METAL);
-  culata.position.set(0, -0.01, 0.315);
-  culata.userData.esCulata = true;
-  grupo.add(culata);
+const MAT_INTERIOR =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x07090c,
 
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.028, 0.01), MAT_GRIP);
-  gatillo.position.set(0, -0.05, 0.02);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.036, 0.02, 0.023);
+    roughness:
+      0.94,
 
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.015, -0.135),
-    puntoCargador: new THREE.Vector3(0, -0.175, 0.06),
-    puntoMira: new THREE.Vector3(0, 0.0655, -0.03),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.052, -0.075),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
+    metalness:
+      0.10,
 
-function cuerpoRifle() {
-  const grupo = new THREE.Group();
+    side:
+      THREE.DoubleSide,
+  });
 
-  const receptor = perfilExtruido(
-    siluetaReceptor('fusil', 0.34, 0.12), 0.095, MAT_METAL, { bisel: 0.0035 }
-  );
-  grupo.add(receptor);
-  // guardamanos delantero, con ranuras de ventilación — la parte
-  // que de verdad rompe la silueta de "un solo bloque largo"
-  const guardamanos = cajaBiselada(0.078, 0.072, 0.14, MAT_GRIP, 0.005);
-  guardamanos.position.set(0, -0.004, -0.115);
-  grupo.add(guardamanos);
-  for (const lado of [-1, 1]) {
-    for (let i = 0; i < 4; i++) {
-      const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.026, 0.016), MAT_LENTE_OSCURA);
-      ranura.position.set(lado * 0.038, -0.004, -0.16 + i * 0.026);
-      grupo.add(ranura);
+
+const MAT_AZUL_OPTICO =
+  new THREE.MeshStandardMaterial({
+    color:
+      0x29445f,
+
+    roughness:
+      0.24,
+
+    metalness:
+      0.68,
+  });
+
+
+const MAT_RETICULA_ROJA =
+  new THREE.MeshBasicMaterial({
+    color:
+      0xff2d20,
+
+    toneMapped:
+      false,
+  });
+
+
+const MAT_RETICULA_VERDE =
+  new THREE.MeshBasicMaterial({
+    color:
+      0x63ff88,
+
+    toneMapped:
+      false,
+  });
+
+
+
+/* ═══════════════════════════════════
+   HELPERS
+═══════════════════════════════════ */
+
+function preparar(
+  obj
+) {
+
+  obj.traverse(
+    n => {
+
+      if (
+        !n.isMesh
+      ) {
+        return;
+      }
+
+
+      n.castShadow =
+        true;
+
+
+      n.receiveShadow =
+        true;
+
+
+      n.frustumCulled =
+        false;
     }
-  }
-
-  agregarRielSuperior(grupo, 0, 0.06, -0.14, 0.11);
-  agregarRemaches(grupo, [
-    [0.043, 0.058, -0.15], [-0.043, 0.058, -0.15],
-    [0.043, 0.058, 0.12], [-0.043, 0.058, 0.12],
-  ]);
-  agregarLineaPanel(grupo, 0.0476, 0, -0.09, 0.17);
-  agregarLineaPanel(grupo, -0.0476, 0, -0.09, 0.17);
-
-  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.028, 0.08), MAT_LENTE_OSCURA);
-  ventanaExpulsion.position.set(0.0455, 0.023, -0.03);
-  grupo.add(ventanaExpulsion);
-
-  const grip = perfilExtruido(siluetaEmpuñadura(0.15, 0.06), 0.06, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.115, 0.03);
-  grip.rotation.x = 0.18;
-  grupo.add(grip);
-
-  // culata larga, angulada para hombro — la silueta más distinta de las tres
-  /* Recorrida 5cm más atrás: el grip (dominando el empuje de
-     seguridad, correctamente) dejaba la culata a solo 2cm detrás
-     de la cámara — demasiado justo, un pequeño balanceo la metía
-     en la zona de recorte. El tubo conecta el hueco que eso deja.*/
-  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.03, 10), MAT_METAL_CLARO);
-  tuboCulata.rotation.x = Math.PI / 2;
-  tuboCulata.position.set(0, -0.01, 0.186);
-  tuboCulata.userData.esCulata = true;
-  grupo.add(tuboCulata);
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.075, 0.19), MAT_METAL);
-  culata.position.set(0, -0.01, 0.295);
-  culata.rotation.x = -0.05;
-  culata.userData.esCulata = true;
-  grupo.add(culata);
-
-  const almohadilla = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.02), MAT_GRIP);
-  almohadilla.position.set(0, -0.015, 0.385);
-  almohadilla.userData.esCulata = true;
-  grupo.add(almohadilla);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.028, 0.01), MAT_GRIP);
-  gatillo.position.set(0, -0.05, 0.0);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.036, 0.0, 0.023);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.02, -0.17),
-    puntoCargador: new THREE.Vector3(0, -0.185, 0.03),
-    puntoMira: new THREE.Vector3(0, 0.068, -0.05),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.055, -0.1),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
-
-function cuerpoEscopeta() {
-  const grupo = new THREE.Group();
-
-  const receptor = perfilExtruido(
-    siluetaReceptor('escopeta', 0.22, 0.105), 0.088, MAT_METAL, { bisel: 0.004 }
   );
-  grupo.add(receptor);
 
-  agregarRielSuperior(grupo, 0, 0.0525, -0.09, 0.08);
-  agregarRemaches(grupo, [
-    [0.041, 0.05, -0.09], [-0.041, 0.05, -0.09],
-    [0.041, 0.05, 0.08], [-0.041, 0.05, 0.08],
-  ]);
-  agregarLineaPanel(grupo, 0.0441, 0, -0.05, 0.13);
-  agregarLineaPanel(grupo, -0.0441, 0, -0.05, 0.13);
 
-  // guardamanos ancho, característico de una escopeta
-  const guardamanos = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.14), MAT_GRIP);
-  guardamanos.position.set(0, -0.02, -0.15);
-  grupo.add(guardamanos);
-
-  // culata robusta y recta
-  /* Recorrida 7cm más atrás: quedaba casi tocando el plano de la
-     cámara (3mm de margen) una vez que el grip fija cuánto se
-     empuja el arma hacia atrás al apuntar. El tubo conecta el
-     hueco que eso deja con el resto del cuerpo.                   */
-  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.055, 10), MAT_METAL_CLARO);
-  tuboCulata.rotation.x = Math.PI / 2;
-  tuboCulata.position.set(0, 0.005, 0.1435);
-  tuboCulata.userData.esCulata = true;
-  grupo.add(tuboCulata);
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.085, 0.17), MAT_GRIP);
-  culata.position.set(0, 0.005, 0.255);
-  culata.userData.esCulata = true;
-  grupo.add(culata);
-
-  const grip = perfilExtruido(siluetaEmpuñadura(0.13, 0.06), 0.058, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.1, 0.07);
-  grip.rotation.x = 0.2;
-  grupo.add(grip);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.026, 0.01), MAT_GRIP);
-  gatillo.position.set(0, -0.045, 0.03);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.032, 0.03, 0.022);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.012, -0.11),
-    puntoCargador: new THREE.Vector3(0, -0.16, 0.02),
-    puntoMira: new THREE.Vector3(0, 0.0605, -0.03),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.052, -0.14),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
+  return obj;
 }
 
-function cuerpoRevolver() {
-  const grupo = new THREE.Group();
 
-  const marco = perfilExtruido(
-    siluetaReceptor('pistola', 0.1, 0.09), 0.07, MAT_METAL, { bisel: 0.004 }
+
+function marcarUltra(
+  grupo,
+  tipo
+) {
+
+  grupo.name =
+    `AccesorioUltra_${tipo}`;
+
+
+  grupo.userData.accesorioUltra =
+    true;
+
+
+  grupo.userData.tipoAccesorio =
+    tipo;
+
+
+  return preparar(
+    grupo
   );
-  marco.position.z = 0.02;
-  grupo.add(marco);
-
-  // tornillos de placa lateral — detalle clásico de revólver, sin
-  // riel (sería anacrónico en un arma de este estilo)
-  agregarRemaches(grupo, [
-    [0.0351, 0.02, 0.0], [0.0351, -0.015, 0.03],
-  ], MAT_METAL_CLARO);
-  agregarLineaPanel(grupo, 0.0351, 0, 0.02, 0.07);
-
-  // el tambor — lo que hace inconfundible a un revólver
-  const tambor = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.05, 8), MAT_METAL_CLARO);
-  tambor.rotation.x = Math.PI / 2;
-  tambor.position.set(0, 0.005, -0.045);
-  grupo.add(tambor);
-
-  // martillo expuesto, atrás — nada lo cubre, a diferencia de una pistola
-  const martillo = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.014), MAT_METAL);
-  martillo.position.set(0, 0.05, 0.045);
-  martillo.rotation.x = -0.3;
-  grupo.add(martillo);
-
-  const grip = perfilExtruido(siluetaEmpuñadura(0.115, 0.055), 0.05, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.09, 0.05);
-  grip.rotation.x = 0.28;
-  grupo.add(grip);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.024, 0.009), MAT_GRIP);
-  gatillo.position.set(0, -0.035, 0.015);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.024, 0.015, 0.019);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.005, -0.07),
-    puntoCargador: new THREE.Vector3(0, -0.1425, 0.05),
-    puntoMira: new THREE.Vector3(0, 0.053, 0.02),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.045, -0.04),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
 }
 
-function cuerpoAutomatica() {
-  const grupo = new THREE.Group();
 
-  const receptor = perfilExtruido(
-    siluetaReceptor('pistola', 0.15, 0.095), 0.07, MAT_METAL, { bisel: 0.0035 }
-  );
-  grupo.add(receptor);
-  const corredera = cajaBiselada(0.066, 0.024, 0.13, MAT_METAL_CLARO, 0.003);
-  corredera.position.set(0, 0.0415, -0.004);
-  grupo.add(corredera);
 
-  agregarRielSuperior(grupo, 0, 0.0475, -0.06, 0.05);
-  agregarRemaches(grupo, [
-    [0.031, 0.045, -0.065], [-0.031, 0.045, -0.065],
-    [0.031, 0.045, 0.05], [-0.031, 0.045, 0.05],
-  ]);
-  agregarLineaPanel(grupo, 0.0351, 0, -0.03, 0.08);
-  agregarLineaPanel(grupo, -0.0351, 0, -0.03, 0.08);
+function tornillo(
 
-  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.02, 0.04), MAT_LENTE_OSCURA);
-  ventanaExpulsion.position.set(0.034, 0.018, -0.01);
-  grupo.add(ventanaExpulsion);
+  grupo,
 
-  // grip más inclinado que la pistola normal — perfil compacto,
-  // de disparo rápido a corta distancia
-  const grip = perfilExtruido(siluetaEmpuñadura(0.115, 0.055), 0.05, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.09, 0.045);
-  grip.rotation.x = 0.32;
-  grupo.add(grip);
+  x,
 
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.024, 0.009), MAT_GRIP);
-  gatillo.position.set(0, -0.038, 0.005);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.026, 0.005, 0.019);
+  y,
 
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.008, -0.075),
-    puntoCargador: new THREE.Vector3(0, -0.1425, 0.045),
-    puntoMira: new THREE.Vector3(0, 0.0555, -0.015),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.042, -0.045),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
+  z,
 
-function cuerpoLmg() {
-  const grupo = new THREE.Group();
+  radio =
+    0.0032,
 
-  const receptor = perfilExtruido(
-    siluetaReceptor('ametralladora', 0.3, 0.13), 0.1, MAT_METAL, { bisel: 0.004 }
-  );
-  grupo.add(receptor);
+  profundidad =
+    0.003
 
-  // sin riel superior — ahí ya va el asa de transporte, agregar
-  // uno encima se vería encimado. Remaches lejos del asa, en las
-  // zonas despejadas del receptor.
-  agregarRemaches(grupo, [
-    [0.046, 0.06, -0.13], [-0.046, 0.06, -0.13],
-    [0.046, 0.06, 0.13], [-0.046, 0.06, 0.13],
-  ]);
-  agregarLineaPanel(grupo, 0.0501, 0, -0.08, 0.2);
-  agregarLineaPanel(grupo, -0.0501, 0, -0.08, 0.2);
+) {
 
-  // asa de transporte arriba — distintiva de una ametralladora ligera
-  const asa = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.03, 0.08), MAT_METAL);
-  asa.position.set(0, 0.08, -0.02);
-  grupo.add(asa);
-  const asaSoporteA = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.015, 0.008), MAT_METAL);
-  asaSoporteA.position.set(0, 0.068, -0.05);
-  grupo.add(asaSoporteA);
-  const asaSoporteB = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.015, 0.008), MAT_METAL);
-  asaSoporteB.position.set(0, 0.068, 0.01);
-  grupo.add(asaSoporteB);
+  const mesh =
+    new THREE.Mesh(
 
-  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.026, 10), MAT_METAL_CLARO);
-  tuboCulata.rotation.x = Math.PI / 2;
-  tuboCulata.position.set(0, -0.015, 0.1645);
-  tuboCulata.userData.esCulata = true;
-  grupo.add(tuboCulata);
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.2), MAT_GRIP);
-  // recorrida 3cm más atrás: quedaba a solo 4cm de la cámara una
-  // vez fijado el empuje real por el grip. El tubo conecta el hueco.
-  culata.position.set(0, -0.015, 0.275);
-  culata.userData.esCulata = true;
-  grupo.add(culata);
+      new THREE.CylinderGeometry(
+        radio,
+        radio,
+        profundidad,
+        10
+      ),
 
-  const grip = perfilExtruido(siluetaEmpuñadura(0.14, 0.06), 0.06, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.115, 0.05);
-  grip.rotation.x = 0.16;
-  grupo.add(grip);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.028, 0.01), MAT_GRIP);
-  gatillo.position.set(0, -0.048, 0.015);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.034, 0.015, 0.023);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.02, -0.15),
-    // más al frente que en los demás cuerpos — la caja de munición
-    // de una LMG suele ir bajo el receptor, no detrás del grip
-    puntoCargador: new THREE.Vector3(0, -0.06, -0.02),
-    puntoMira: new THREE.Vector3(0, 0.09, -0.05),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.062, -0.11),
-    huecoMira: 0.025,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
-
-function cuerpoFrancotirador() {
-  const grupo = new THREE.Group();
-
-  const receptor = perfilExtruido(
-    siluetaReceptor('precision', 0.24, 0.09), 0.075, MAT_METAL, { bisel: 0.0035 }
-  );
-  grupo.add(receptor);
-  // culata de madera/polímero con caída — el perfil clásico de un
-  // rifle de cerrojo, imposible de sugerir con una sola caja
-  const perfilCulata = perfilExtruido(
-    [[-0.02,0.03],[0.10,0.045],[0.155,0.005],[0.155,-0.05],[0.09,-0.055],[-0.02,-0.035]],
-    0.062, MAT_GRIP, { bisel: 0.005 }
-  );
-  perfilCulata.position.set(0, -0.012, 0.115);
-  perfilCulata.userData.esCulata = true;
-  grupo.add(perfilCulata);
-
-  agregarRielSuperior(grupo, 0, 0.045, -0.09, 0.07);
-  agregarRemaches(grupo, [
-    [0.0376, 0.043, -0.1], [-0.0376, 0.043, -0.1],
-    [0.0376, 0.043, 0.09], [-0.0376, 0.043, 0.09],
-  ]);
-  agregarLineaPanel(grupo, 0.0376, 0, -0.05, 0.15);
-  agregarLineaPanel(grupo, -0.0376, 0, -0.05, 0.15);
-
-  // manija de cerrojo lateral — lo que distingue a un rifle de
-  // cerrojo de todo lo demás en el juego
-  const cerrojo = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 8), MAT_METAL_CLARO);
-  cerrojo.rotation.z = Math.PI / 2;
-  cerrojo.position.set(0.045, 0.02, 0.06);
-  grupo.add(cerrojo);
-  const perillaCerrojo = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), MAT_METAL_CLARO);
-  perillaCerrojo.position.set(0.07, 0.02, 0.06);
-  grupo.add(perillaCerrojo);
-
-  // culata larga, con carrillera elevada para alinear con la mira
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.075, 0.24), MAT_GRIP);
-  culata.position.set(0, 0.005, 0.28);
-  culata.userData.esCulata = true;
-  grupo.add(culata);
-  const carrillera = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.14), MAT_GRIP);
-  carrillera.position.set(0, 0.05, 0.24);
-  carrillera.userData.esCulata = true;
-  grupo.add(carrillera);
-
-  const grip = perfilExtruido(siluetaEmpuñadura(0.12, 0.055), 0.055, MAT_GRIP, { bisel: 0.004 });
-  grip.position.set(0, -0.1, 0.06);
-  grip.rotation.x = 0.14;
-  grupo.add(grip);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.026, 0.01), MAT_GRIP);
-  gatillo.position.set(0, -0.042, 0.025);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.03, 0.025, 0.021);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.018, -0.12),
-    puntoCargador: new THREE.Vector3(0, -0.155, 0.06),
-    puntoMira: new THREE.Vector3(0, 0.053, -0.04),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.05, -0.08),
-    huecoMira: 0.008,   // qué tan por debajo del punto de mira empieza el cuerpo real
-  };
-}
-
-/* PDW (Personal Defense Weapon) — compacta, alto ritmo de fuego,
-   pensada para distancias cortas con más control que un subfusil
-   normal. Comparte silueta 'compacto' con el subfusil pero a
-   menor escala (~75%), con una empuñadura delantera integrada
-   angulada (el detalle que distingue a un PDW real de un subfusil
-   genérico) y una culata mínima, casi un tope de hombro.         */
-function cuerpoPDW() {
-  const grupo = new THREE.Group();
-
-  const receptor = perfilExtruido(
-    siluetaReceptor('compacto', 0.205, 0.095), 0.072, MAT_METAL, { bisel: 0.003 }
-  );
-  grupo.add(receptor);
-  const tapa = cajaBiselada(0.066, 0.011, 0.15, MAT_METAL_CLARO, 0.0025);
-  tapa.position.set(0, 0.0445, -0.008);
-  grupo.add(tapa);
-
-  agregarRielSuperior(grupo, 0, 0.047, -0.085, 0.07);
-  agregarRemaches(grupo, [
-    [0.032, 0.045, -0.09], [-0.032, 0.045, -0.09],
-    [0.032, 0.045, 0.075], [-0.032, 0.045, 0.075],
-  ]);
-  agregarLineaPanel(grupo, 0.036, 0, -0.05, 0.10);
-  agregarLineaPanel(grupo, -0.036, 0, -0.05, 0.10);
-
-  const ventanaExpulsion = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.02, 0.05), MAT_LENTE_OSCURA);
-  ventanaExpulsion.position.set(0.034, 0.018, -0.015);
-  grupo.add(ventanaExpulsion);
-
-  // empuñadura delantera angulada e integrada al cuerpo — el
-  // detalle que la distingue de un subfusil genérico
-  const grip = perfilExtruido(siluetaEmpuñadura(0.105, 0.048), 0.048, MAT_GRIP, { bisel: 0.0032 });
-  grip.position.set(0, -0.085, 0.045);
-  grip.rotation.x = 0.22;
-  grupo.add(grip);
-
-  // culata mínima, casi un tope de hombro — un PDW prioriza el
-  // tamaño compacto sobre la estabilidad al hombro. Tubo de
-  // conexión desde el principio (ver la lección del subfusil): la
-  // culata siempre queda lejos de la cámara por seguridad, así que
-  // sin el tubo se vería como una caja suelta, separada del arma.
-  const tuboCulata = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.153, 10), MAT_METAL_CLARO);
-  tuboCulata.rotation.x = Math.PI / 2;
-  tuboCulata.position.set(0, -0.008, 0.181);
-  tuboCulata.userData.esCulata = true;
-  grupo.add(tuboCulata);
-  const culata = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.055), MAT_METAL);
-  culata.position.set(0, -0.008, 0.285);
-  culata.userData.esCulata = true;
-  grupo.add(culata);
-
-  const gatillo = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.022, 0.008), MAT_GRIP);
-  gatillo.position.set(0, -0.04, 0.015);
-  grupo.add(gatillo);
-  agregarGuardamonte(grupo, 0, -0.028, 0.015, 0.018);
-
-  return {
-    grupo,
-    puntoCañon: new THREE.Vector3(0, 0.012, -0.10),
-    puntoCargador: new THREE.Vector3(0, -0.135, 0.045),
-    puntoMira: new THREE.Vector3(0, 0.052, -0.022),
-    puntoEmpuñadura: new THREE.Vector3(0, -0.04, -0.055),
-    huecoMira: 0.007,
-  };
-}
-
-const FABRICAS_CUERPO = {
-  pistola: cuerpoPistola, subfusil: cuerpoSubfusil, rifle: cuerpoRifle,
-  escopeta: cuerpoEscopeta, revolver: cuerpoRevolver, automatica: cuerpoAutomatica,
-  lmg: cuerpoLmg, francotirador: cuerpoFrancotirador, pdw: cuerpoPDW,
-};
-
-/* ── cañones — cada uno reporta su longitud real, para saber   ─
-   dónde termina la punta (ahí sale la trazadora/fogonazo)      */
-
-function cañonCorto() {
-  const grupo = new THREE.Group();
-  const longitud = 0.13;
-  /* Perfil torneado en vez de un cilindro recto: recámara gruesa
-     atrás, escalón de transición, conicidad leve a lo largo y
-     labio en la boca. Es la diferencia entre un tubo de juguete y
-     algo que parece mecanizado.                                  */
-  const tubo = torneado(perfilCañon(longitud, 0.017), MAT_METAL, { segmentos: 18 });
-  grupo.add(tubo);
-  return { grupo, longitud, radioPunta: 0.017 };
-}
-
-function cañonEstandar() {
-  const grupo = new THREE.Group();
-  const longitud = 0.22;
-  /* Perfil torneado en vez de un cilindro recto: recámara gruesa
-     atrás, escalón de transición, conicidad leve a lo largo y
-     labio en la boca. Es la diferencia entre un tubo de juguete y
-     algo que parece mecanizado.                                  */
-  const tubo = torneado(perfilCañon(longitud, 0.018), MAT_METAL, { segmentos: 18 });
-  grupo.add(tubo);
-  return { grupo, longitud, radioPunta: 0.018 };
-}
-
-function cañonLargo() {
-  const grupo = new THREE.Group();
-  const longitud = 0.36;
-  const radioBase = 0.019;
-  /* Perfil torneado en vez de un cilindro recto: recámara gruesa
-     atrás, escalón de transición, conicidad leve a lo largo y
-     labio en la boca. Es la diferencia entre un tubo de juguete y
-     algo que parece mecanizado.                                  */
-  const tubo = torneado(perfilCañon(longitud, radioBase), MAT_METAL, { segmentos: 18 });
-  grupo.add(tubo);
-
-  /* Guardamanos: era una caja lisa flotando alrededor del cañón, se
-     leía como una caja suelta abrazando el tubo, sin ninguna conexión
-     visual con el cuerpo del arma. Ahora es una silueta biselada,
-     con ventilación (los huecos característicos de cualquier
-     guardamanos AR/M-LOK de rifle real), un anillo delantero grueso
-     donde termina el guardamanos, y un anillo trasero (moldura) que
-     lo une al cuerpo del arma. Cubre 65% del cañón como antes; sus
-     medidas siguen calculadas desde `longitud` y `radioBase`, así
-     escala automáticamente si el cañón cambia de tamaño.           */
-  const LARGO_GUARDAMANOS = longitud * 0.65;
-  const anchoGuardamanos = radioBase * 2.6;
-  const altoGuardamanos = radioBase * 2.35;
-  const yGuarda = -radioBase * 1.47;
-  const zCentroGuarda = -0.02 - LARGO_GUARDAMANOS / 2;
-
-  // el cuerpo del guardamanos: un caja biselada leve, mucho mejor
-  // silueta que una caja recta
-  const guardamanos = cajaBiselada(anchoGuardamanos, altoGuardamanos, LARGO_GUARDAMANOS, MAT_GRIP, 0.004);
-  guardamanos.position.set(0, yGuarda, zCentroGuarda);
-  grupo.add(guardamanos);
-
-  // ventilación M-LOK: dos filas de ranuras a los lados, muy típicas
-  // de un guardamanos moderno — sin esto se veía como un bloque
-  // liso, con esto se lee como accesorio de rifle real
-  const zsVent = [
-    zCentroGuarda - LARGO_GUARDAMANOS * 0.30,
-    zCentroGuarda - LARGO_GUARDAMANOS * 0.10,
-    zCentroGuarda + LARGO_GUARDAMANOS * 0.10,
-    zCentroGuarda + LARGO_GUARDAMANOS * 0.30,
-  ];
-  for (const z of zsVent) {
-    for (const signoX of [-1, 1]) {
-      const ventana = new THREE.Mesh(
-        new THREE.BoxGeometry(0.002, altoGuardamanos * 0.35, LARGO_GUARDAMANOS * 0.11),
-        MAT_LENTE_OSCURA,
-      );
-      ventana.position.set(signoX * (anchoGuardamanos / 2 + 0.0005), yGuarda, z);
-      grupo.add(ventana);
-    }
-  }
-
-  // anillo frontal grueso — el "capuchón" donde termina el
-  // guardamanos, típico de un rifle largo (M4, AK, etc.). Da un
-  // remate visual claro en vez de una cara plana pelada.
-  const anilloFrente = new THREE.Mesh(
-    new THREE.CylinderGeometry(radioBase * 1.55, radioBase * 1.55, 0.012, 12),
-    MAT_METAL_CLARO,
-  );
-  anilloFrente.rotation.x = Math.PI / 2;
-  anilloFrente.position.set(0, 0, zCentroGuarda - LARGO_GUARDAMANOS / 2 - 0.005);
-  grupo.add(anilloFrente);
-
-  // moldura de unión al cuerpo: el "collar" trasero — es lo que hace
-  // que el guardamanos ya no se lea como una caja suelta sino como
-  // parte del arma que enrosca en el receptor.
-  const collarUnion = new THREE.Mesh(
-    new THREE.CylinderGeometry(radioBase * 1.72, radioBase * 1.55, 0.017, 12),
-    MAT_METAL_CLARO,
-  );
-  collarUnion.rotation.x = Math.PI / 2;
-  collarUnion.position.set(0, 0, -0.017);
-  grupo.add(collarUnion);
-
-  // riel superior corto en el guardamanos — para poder montar
-  // accesorios al frente, típico de un guardamanos moderno
-  agregarRielSuperior(grupo, 0, altoGuardamanos / 2 + yGuarda + 0.002, zCentroGuarda - LARGO_GUARDAMANOS * 0.35, LARGO_GUARDAMANOS * 0.7);
-
-  return { grupo, longitud, radioPunta: radioBase };
-}
-
-function cañonPesado() {
-  const grupo = new THREE.Group();
-  const longitud = 0.26;
-  /* Perfil torneado en vez de un cilindro recto: recámara gruesa
-     atrás, escalón de transición, conicidad leve a lo largo y
-     labio en la boca. Es la diferencia entre un tubo de juguete y
-     algo que parece mecanizado.                                  */
-  const tubo = torneado(perfilCañon(longitud, 0.024), MAT_METAL, { segmentos: 18 });
-  grupo.add(tubo);
-
-  // aletas de disipación — más ancho que cualquier otro cañón,
-  // se lee como "pesado" a simple vista
-  for (let i = 0; i < 3; i++) {
-    const aleta = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.006, 0.022), MAT_METAL_CLARO);
-    aleta.position.set(0, 0.022, -0.05 - i * 0.055);
-    grupo.add(aleta);
-  }
-
-  return { grupo, longitud, radioPunta: 0.024 };
-}
-
-/* Más extremo que el corto: el tubo más delgado del juego, sin
-   ningún detalle extra — es la opción "nada, solo lo esencial"
-   para builds que priorizan cadencia sobre todo lo demás.        */
-function cañonUltraligero() {
-  const grupo = new THREE.Group();
-  const longitud = 0.10;
-  const radioBase = 0.013;
-  const tubo = torneado(perfilCañon(longitud, radioBase), MAT_METAL, { segmentos: 14 });
-  grupo.add(tubo);
-  return { grupo, longitud, radioPunta: radioBase };
-}
-
-const FABRICAS_CAÑON = {
-  corto: cañonCorto, estandar: cañonEstandar, largo: cañonLargo, pesado: cañonPesado,
-  ultraligero: cañonUltraligero,
-};
-
-/* ── cargadores — cuelgan del punto de cargador del cuerpo ──── */
-
-function cargadorPequeño() {
-  const grupo = new THREE.Group();
-  const alto = 0.062;
-  const cuerpo = cajaBiselada(0.032, alto, 0.045, MAT_METAL, 0.003);
-  cuerpo.position.y = -alto / 2;
-  grupo.add(cuerpo);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.008, 0.05), MAT_METAL_CLARO);
-  base.position.y = -alto - 0.004;
-  grupo.add(base);
-  return grupo;
-}
-
-function cargadorMedio() {
-  const grupo = new THREE.Group();
-  const alto = 0.11;
-  const cuerpo = cajaBiselada(0.032, alto, 0.045, MAT_METAL, 0.0035);
-  cuerpo.position.y = -alto / 2;
-  grupo.add(cuerpo);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.009, 0.05), MAT_METAL_CLARO);
-  base.position.y = -alto - 0.0045;
-  grupo.add(base);
-  return grupo;
-}
-
-function cargadorGrande() {
-  /* Curva de "banana" REAL, no solo una caja inclinada: la
-     silueta se dobla hacia adelante conforme baja, como un
-     cargador curvo de verdad — usando la misma técnica de perfil
-     extruido que los cuerpos, solo que en el plano X (a lo ancho)
-     en vez de Z.                                                */
-  const grupo = new THREE.Group();
-  const alto = 0.175;
-  const cuerpo = perfilExtruido(
-    [[0, 0.016], [0.006, -alto * 0.4], [0.018, -alto * 0.75], [0.03, -alto],
-     [0.022, -alto], [0.012, -alto * 0.73], [0.001, -alto * 0.4], [-0.006, 0]],
-    0.045, MAT_METAL, { bisel: 0.003 }
-  );
-  cuerpo.rotation.y = Math.PI / 2;   // el perfil se dibujó en X-Y; rotar para que la curva quede en Z
-  grupo.add(cuerpo);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.052), MAT_METAL_CLARO);
-  base.position.set(0.026, -alto - 0.005, 0);
-  grupo.add(base);
-  return grupo;
-}
-
-function cargadorTambor() {
-  const grupo = new THREE.Group();
-  const radio = 0.05;
-  // eje del cilindro apuntando de lado (no hacia arriba/abajo),
-  // así la cara circular del tambor se ve de frente — la silueta
-  // más distinta de las cuatro
-  const disco = new THREE.Mesh(new THREE.CylinderGeometry(radio, radio, 0.038, 18), MAT_METAL);
-  disco.rotation.x = Math.PI / 2;
-  disco.position.y = -radio - 0.015;
-  grupo.add(disco);
-  const cuello = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.04), MAT_METAL_CLARO);
-  cuello.position.y = -0.015;
-  grupo.add(cuello);
-  return grupo;
-}
-
-const FABRICAS_CARGADOR = {
-  pequeño: cargadorPequeño, medio: cargadorMedio, grande: cargadorGrande, tambor: cargadorTambor,
-};
-
-/* ── miras — montadas en el punto de mira del cuerpo ─────────── */
-
-function miraNinguna() {
-  return { grupo: new THREE.Group(), puntoOcular: new THREE.Vector3(0, 0.02, 0.04) };
-}
-
-function miraHierro(puntaCañonLocal, huecoMira) {
-  const grupo = new THREE.Group();
-
-  /* ALZA TRASERA. Antes era diminuta (2cm de ancho, 9mm de alto),
-     y contra cuerpos tan gruesos y cuadrados prácticamente no se
-     alcanzaba a ver. Ahora va sobre una base elevada que la separa
-     del cuerpo, y las orejas son bastante más altas — que es lo
-     que de verdad enmarca el punto delantero al apuntar.         */
-  const TOPE_BASE = 0.006;
-  const profundidad = TOPE_BASE + (huecoMira ?? 0.008) + 0.005;
-  const baseAlza = new THREE.Mesh(new THREE.BoxGeometry(0.026, profundidad, 0.016), MAT_METAL);
-  baseAlza.position.set(0, (TOPE_BASE - profundidad) / 2, 0.02);
-  grupo.add(baseAlza);
-
-  const ALTO_OREJAS = 0.019;
-  const Y_OREJAS = TOPE_BASE + ALTO_OREJAS / 2;
-  for (const x of [-0.011, 0.011]) {
-    const oreja = new THREE.Mesh(new THREE.BoxGeometry(0.006, ALTO_OREJAS, 0.012), MAT_METAL);
-    oreja.position.set(x, Y_OREJAS, 0.02);
-    grupo.add(oreja);
-  }
-  // puente que une las orejas por abajo — deja la muesca en U por
-  // donde de verdad miras
-  const puente = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.005, 0.012), MAT_METAL);
-  puente.position.set(0, TOPE_BASE + 0.003, 0.02);
-  grupo.add(puente);
-
-  /* POSTE DELANTERO. Va sobre el CAÑÓN, bastante más abajo que el
-     punto de mira. Se sube hasta quedar a la MISMA altura que la
-     muesca del alza — si no, al apuntar el poste no aparece dentro
-     de la mira, que era justo lo que pasaba.                     */
-  const puntaZ = puntaCañonLocal ? puntaCañonLocal.z + 0.014 : -0.16;
-  const alturaCañon = puntaCañonLocal ? puntaCañonLocal.y : -0.045;
-  const alturaPuntoMira = Y_OREJAS + 0.002;   // línea de mira real
-
-  // torre que sube desde el cañón hasta la línea de mira
-  const alturaTorre = alturaPuntoMira - alturaCañon;
-  const torre = new THREE.Mesh(new THREE.BoxGeometry(0.009, alturaTorre, 0.011), MAT_METAL);
-  torre.position.set(0, alturaCañon + alturaTorre / 2, puntaZ);
-  grupo.add(torre);
-
-  // collar que abraza el cañón en la base de la torre
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.019, 0.014, 12), MAT_METAL);
-  collar.rotation.x = Math.PI / 2;
-  collar.position.set(0, alturaCañon, puntaZ);
-  grupo.add(collar);
-
-  // el poste en sí, en la línea de mira
-  const poste = new THREE.Mesh(new THREE.BoxGeometry(0.0045, 0.011, 0.0045), MAT_METAL_CLARO);
-  poste.position.set(0, alturaPuntoMira + 0.004, puntaZ);
-  grupo.add(poste);
-  const bola = new THREE.Mesh(new THREE.SphereGeometry(0.0035, 8, 6), MAT_METAL_CLARO);
-  bola.position.set(0, alturaPuntoMira + 0.011, puntaZ);
-  grupo.add(bola);
-
-  // orejas protectoras del poste — detalle de arma real, y ayudan a
-  // ubicarlo visualmente a distancia
-  for (const x of [-0.012, 0.012]) {
-    const protector = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.016, 0.008), MAT_METAL);
-    protector.position.set(x, alturaPuntoMira + 0.006, puntaZ);
-    grupo.add(protector);
-  }
-
-  // el ojo va detrás de la muesca, a su misma altura, para que el
-  // poste delantero caiga justo en medio de las orejas
-  /* Distancia ocular real: el alza trasera (base + orejas + puente)
-     llega hasta z=0.0295 local, así que con 0.055 solo había 2.55cm
-     libres de verdad — muy por debajo de los ~12cm que necesita el
-     plano near de la cámara (10cm + colchón). El alza trasera se
-     recortaba y llenaba toda la pantalla al apuntar (igual que le
-     pasó a reflex/holográfica/prismática/telescópica). Con 0.19
-     quedan ~16cm — con margen extra para el empuje de retroceso
-     al disparar apuntando. La altura de mira (Y) no cambia, así
-     que la alineación poste/muesca sigue intacta, solo se aleja
-     el ojo.*/
-  return { grupo, puntoOcular: new THREE.Vector3(0, Y_OREJAS + 0.002, 0.19) };
-}
-
-function miraReflex(_puntaCañonLocal, huecoMira) {
-  const grupo = new THREE.Group();
-
-  const TOPE_RIEL = 0.007;
-  const profundidad = TOPE_RIEL + (huecoMira ?? 0.008) + 0.004;
-  const riel = new THREE.Mesh(new THREE.BoxGeometry(0.032, profundidad, 0.044), MAT_METAL);
-  riel.position.y = (TOPE_RIEL - profundidad) / 2;
-  grupo.add(riel);
-
-  /* Perfil de "gota": una base sólida y una ventana inclinada hacia
-     atrás, sostenida por dos brazos. Antes era una caja con una
-     ventana casi transparente encima, que en fondo oscuro se leía
-     como si no hubiera nada.                                       */
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.014, 0.042), MAT_METAL);
-  base.position.set(0, 0.014, 0.004);
-  grupo.add(base);
-
-  for (const x of [-0.014, 0.014]) {
-    const brazo = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.026, 0.006), MAT_METAL);
-    brazo.position.set(x, 0.031, 0.014);
-    brazo.rotation.x = -0.22;   // ligeramente reclinado, como los reflex reales
-    grupo.add(brazo);
-  }
-  // capucha superior, protege la ventana
-  const capucha = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.005, 0.016), MAT_METAL);
-  capucha.position.set(0, 0.044, 0.008);
-  grupo.add(capucha);
-
-  // la ventana, inclinada y con cuerpo real
-  const MAT_VENTANA_REFLEX = new THREE.MeshBasicMaterial({
-    color: 0x9fd8c8, transparent: true, opacity: 0.14, depthWrite: false,
-  });
-  const ventana = new THREE.Mesh(new THREE.PlaneGeometry(0.026, 0.026), MAT_VENTANA_REFLEX);
-  ventana.position.set(0, 0.031, -0.004);
-  ventana.rotation.x = -0.22;
-  grupo.add(ventana);
-  // el punto rojo, lo que de verdad usas para apuntar
-  const punto = new THREE.Mesh(new THREE.CircleGeometry(0.0022, 8), MAT_PUNTO_ROJO);
-  punto.position.set(0, 0.031, -0.002);
-  punto.rotation.x = -0.22;
-  grupo.add(punto);
-
-  // perilla de ajuste lateral
-  const perilla = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.007, 10), MAT_METAL_CLARO);
-  perilla.rotation.z = Math.PI / 2;
-  perilla.position.set(0.016, 0.014, 0.01);
-  grupo.add(perilla);
-
-  // reflex/holográfica en la vida real tienen distancia ocular
-  // ILIMITADA (por eso son tan usados) — pero en el juego la
-  // cámara tiene un plano near a 10cm: con menos de esa distancia
-  // (más un colchón) la propia carcasa de la mira se recorta y se
-  // ve como si la atravesaras. Medido: la base de esta mira llega
-  // hasta z=0.025 local, así que con 0.11 solo había 8.5cm de
-  // verdad libres — no alcanzaba. Con 0.18 quedan ~15cm — con
-  // margen extra para el empuje de retroceso al disparar apuntando.
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.031, 0.18) };
-}
-
-function miraHolografica(_puntaCañonLocal, huecoMira) {
-  const grupo = new THREE.Group();
-
-  const TOPE_RIEL = 0.007;
-  const profundidad = TOPE_RIEL + (huecoMira ?? 0.008) + 0.004;
-  const riel = new THREE.Mesh(new THREE.BoxGeometry(0.036, profundidad, 0.052), MAT_METAL);
-  riel.position.y = (TOPE_RIEL - profundidad) / 2;
-  grupo.add(riel);
-
-  // carcasa de caja abierta: dos paredes laterales y un techo, con
-  // la ventana suspendida en medio — es lo que le da el perfil
-  // rectangular inconfundible de una holográfica
-  for (const x of [-0.019, 0.019]) {
-    const pared = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.032, 0.05), MAT_METAL);
-    pared.position.set(x, 0.021, 0);
-    grupo.add(pared);
-  }
-  const techo = new THREE.Mesh(new THREE.BoxGeometry(0.043, 0.006, 0.05), MAT_METAL);
-  techo.position.set(0, 0.04, 0);
-  grupo.add(techo);
-  // bloque trasero (electrónica) — cierra la silueta por atrás
-  /* El bloque de electrónica va ARRIBA, no atrás: puesto detrás
-     quedaba justo en la línea de mira y tapaba la vista por
-     completo (confirmado con raycasting desde el punto ocular).  */
-  const bloqueTrasero = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.012, 0.022), MAT_METAL_CLARO);
-  bloqueTrasero.position.set(0, 0.046, 0.024);
-  grupo.add(bloqueTrasero);
-
-  // ventana grande, ahora con cuerpo visible
-  /* Ventana MUY tenue: con opacidad alta se veía la mira pero no se
-     podía ver a través, que es justo para lo que sirve. El marco
-     sólido (paredes + techo + bloque trasero) ya le da presencia
-     visual, así que el cristal puede ser casi limpio.            */
-  const MAT_VENTANA_HOLO = new THREE.MeshBasicMaterial({
-    color: 0x8fd0e8, transparent: true, opacity: 0.13, depthWrite: false,
-  });
-  const ventana = new THREE.Mesh(new THREE.PlaneGeometry(0.032, 0.028), MAT_VENTANA_HOLO);
-  ventana.position.set(0, 0.022, -0.008);
-  grupo.add(ventana);
-  // el punto de puntería, en el centro de la ventana
-  const punto = new THREE.Mesh(new THREE.CircleGeometry(0.0025, 8), MAT_PUNTO_ROJO);
-  punto.position.set(0, 0.022, -0.006);
-  grupo.add(punto);
-  // retícula de círculo partido, típica de las holográficas
-  for (const [dx, dy] of [[-0.011, 0], [0.011, 0], [0, 0.011]]) {
-    const marca = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.0012, 0.001), MAT_PUNTO_ROJO);
-    marca.position.set(dx, 0.022 + dy, -0.006);
-    if (dy !== 0) marca.rotation.z = Math.PI / 2;
-    grupo.add(marca);
-  }
-
-  // igual que en la reflex: el bloque de electrónica llega hasta
-  // z=0.035 local, así que 0.12 solo dejaba 8.5cm reales de
-  // distancia ocular — menos de los 10cm+colchón que necesita la
-  // cámara. Con 0.19 quedan ~16.5cm — con margen extra para el empuje de retroceso al disparar apuntando.
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.022, 0.19) };
-}
-
-function miraLaser() {
-  const grupo = new THREE.Group();
-
-  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.017, 0.017, 0.05), MAT_METAL);
-  cuerpo.position.y = 0.0085;
-  grupo.add(cuerpo);
-
-  // lente emisora, oscura salvo cuando dispara la luz de verdad
-  const emisor = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.01, 10), MAT_LENTE_OSCURA);
-  emisor.rotation.x = Math.PI / 2;
-  emisor.position.set(0, 0.0085, -0.03);
-  grupo.add(emisor);
-
-  const boton = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.004, 8), MAT_METAL_CLARO);
-  boton.position.set(0.007, 0.017, 0.01);
-  grupo.add(boton);
-
-  // no es un óptico — no hay nada que "mirar a través", se
-  // comporta como apuntar sin mira, PERO sí tiene cuerpo físico
-  // (la carcasa del láser) que puede recortarse igual que las
-  // demás miras: llega hasta z=0.025 local, y con 0.04 solo había
-  // 1.5cm reales — el peor caso de todos. Con 0.18 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.
-  return { grupo, puntoOcular: new THREE.Vector3(0, 0.02, 0.18) };
-}
-
-function miraPrismatica(_puntaCañonLocal, huecoMira) {
-  const grupo = new THREE.Group();
-
-  const TOPE_BASE = 0.007;
-  const profundidad = TOPE_BASE + (huecoMira ?? 0.008) + 0.005;
-  const base = cajaBiselada(0.026, profundidad, 0.03, MAT_METAL, 0.0025);
-  base.position.set(0, (TOPE_BASE - profundidad) / 2, 0.008);
-  grupo.add(base);
-
-  const ALTO_CUERPO = 0.035;
-  /* Marco hueco, no un bloque sólido: paredes laterales, techo y
-     piso, con el CENTRO abierto — un bloque macizo aquí tapaba por
-     completo el camino óptico entre el ocular de atrás y la
-     ventana de adelante (confirmado con raycasting: bloqueaba
-     100% del campo de visión, sin importar el ángulo).           */
-  for (const x of [-0.014, 0.014]) {
-    const pared = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.032, 0.058), MAT_METAL);
-    pared.position.set(x, ALTO_CUERPO, 0);
-    grupo.add(pared);
-  }
-  const techo = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.005, 0.058), MAT_METAL);
-  techo.position.set(0, ALTO_CUERPO + 0.0185, 0);
-  grupo.add(techo);
-  const piso = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.004, 0.058), MAT_METAL_CLARO);
-  piso.position.set(0, ALTO_CUERPO - 0.0185, 0);
-  grupo.add(piso);
-
-  // la ventana del prisma, angulada — el detalle que la distingue
-  // de cualquier otra mira: el "vidrio" no queda perpendicular al
-  // cañón, va inclinado, como el prisma real que hay adentro
-  const MAT_PRISMA = new THREE.MeshBasicMaterial({
-    color: 0x7fd8b0, transparent: true, opacity: 0.16, depthWrite: false,
-  });
-  const ventanaPrisma = new THREE.Mesh(new THREE.PlaneGeometry(0.024, 0.03), MAT_PRISMA);
-  ventanaPrisma.position.set(0, ALTO_CUERPO + 0.002, -0.028);
-  ventanaPrisma.rotation.x = 0.32;
-  grupo.add(ventanaPrisma);
-
-  // capuchón del ocular, sobresale un poco atrás del cuerpo
-  const ocular = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.018, 12, 1, true), MAT_TUBO);
-  ocular.rotation.x = Math.PI / 2;
-  ocular.position.set(0, ALTO_CUERPO, 0.04);
-  grupo.add(ocular);
-
-  // tapa de batería arriba — detalle chico, típico de estas miras
-  const tapaBateria = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.006, 10), MAT_METAL_CLARO);
-  tapaBateria.position.set(0, ALTO_CUERPO + 0.021, 0.015);
-  grupo.add(tapaBateria);
-  // ranuras de la tapa, para que no se vea un cilindro liso
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.0012, 0.0062, 0.0012), MAT_METAL);
-    ranura.position.set(Math.cos(a) * 0.0055, ALTO_CUERPO + 0.021, 0.015 + Math.sin(a) * 0.0055);
-    grupo.add(ranura);
-  }
-
-  // retícula grabada — cruz simple, visible al centro del ocular
-  const Z_RETICULA = 0.038;
-  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.0011, 0.02, 0.0006), MAT_RETICULA);
-  cruzV.position.set(0, ALTO_CUERPO, Z_RETICULA);
-  grupo.add(cruzV);
-  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.0011, 0.0006), MAT_RETICULA);
-  cruzH.position.set(0, ALTO_CUERPO, Z_RETICULA);
-  grupo.add(cruzH);
-  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0018, 8), MAT_PUNTO_ROJO);
-  puntoCentro.position.set(0, ALTO_CUERPO, Z_RETICULA + 0.0004);
-  grupo.add(puntoCentro);
-
-  // distancia ocular generosa — pero el capuchón del ocular llega
-  // hasta z=0.049 local, así que con 0.15 solo quedaban 10.1cm
-  // reales, un poco corto contra el plano near de la cámara
-  // (10cm+colchón). Con 0.21 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_CUERPO, 0.21) };
-}
-
-function miraTelescopica(_puntaCañonLocal, huecoMira) {
-  const grupo = new THREE.Group();
-  const ALTO_TUBO = 0.03;    // eje del tubo sobre el punto de montaje
-
-  /* El tubo y las campanas se agrandaron ~1.9x en su radio (de
-     0.015 a 0.028 en el tubo principal) respecto al diseño
-     anterior. No es un capricho estético: cuando se alejó el ojo
-     de 0.17 a 0.26 para el arreglo del recorte de cámara, el tubo
-     -con su radio viejo- pasó a verse mucho más chico y lejano en
-     el campo de visión real, y alrededor de ese "hoyo" angosto
-     empezaba a entrar en cuadro todo lo que está montado por
-     fuera (torreta, anillos de montura) — eso es justo el
-     desorden que se reportó. Con el tubo más grande, vuelve a
-     llenar la vista como un visor real, y lo de afuera queda
-     donde debe: fuera de cuadro.                                  */
-  const RADIO_TUBO = 0.028;
-
-  // Patas de montaje: bajan lo justo para cubrir el hueco real del
-  // cuerpo al que se monta, con traslape.
-  const TOPE_PATA = 0.009;
-  const profundidad = TOPE_PATA + (huecoMira ?? 0.008) + 0.006;
-  const centroPata = (TOPE_PATA - profundidad) / 2;
-
-  for (const z of [-0.032, 0.038]) {
-    const pata = new THREE.Mesh(new THREE.BoxGeometry(0.024, profundidad, 0.018), MAT_METAL);
-    pata.position.set(0, centroPata, z);
-    grupo.add(pata);
-    // anillo que abraza el tubo — cerrado por fuera, así se ve
-    // como una montura de verdad y no como un aro flotando
-    const anillo = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.0075, RADIO_TUBO + 0.0075, 0.016, 20, 1, true), MAT_TUBO);
-    anillo.rotation.x = Math.PI / 2;
-    anillo.position.set(0, ALTO_TUBO, z);
-    grupo.add(anillo);
-  }
-
-  /* El tubo. Antes estaba hueco (openEnded) para poder "ver a
-     través", pero eso lo volvía casi invisible desde fuera: se veía
-     el fondo oscuro por dentro y parecía que no había nada. Ahora es
-     un tubo SÓLIDO por fuera — la vista a través se resuelve con el
-     punto ocular (arma.js coloca tu ojo justo en el lente trasero),
-     no dejando el tubo transparente.                              */
-  const tubo = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO, RADIO_TUBO, 0.125, 20, 1, true), MAT_TUBO);
-  tubo.rotation.x = Math.PI / 2;
-  tubo.position.set(0, ALTO_TUBO, 0.004);
-  grupo.add(tubo);
-
-  // campana delantera (objetivo) — más ancha, es lo que da la
-  // silueta reconocible de un visor
-  const campanaDelantera = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.012, RADIO_TUBO + 0.006, 0.042, 20, 1, true), MAT_TUBO);
-  campanaDelantera.rotation.x = Math.PI / 2;
-  campanaDelantera.position.set(0, ALTO_TUBO, -0.082);
-  grupo.add(campanaDelantera);
-
-  // campana trasera (ocular)
-  const campanaTrasera = new THREE.Mesh(new THREE.CylinderGeometry(RADIO_TUBO + 0.016, RADIO_TUBO + 0.008, 0.04, 20, 1, true), MAT_TUBO);
-  campanaTrasera.rotation.x = Math.PI / 2;
-  campanaTrasera.position.set(0, ALTO_TUBO, 0.086);
-  grupo.add(campanaTrasera);
-
-  /* Torreta única de elevación — se aleja del eje del tubo lo
-     mismo que creció el radio, para que se mantenga proporcionada
-     y afuera del cono de visión al apuntar (antes se posicionaba
-     pegada al radio viejo, mucho más chico).                     */
-  const torretaArriba = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.018, 12), MAT_METAL_CLARO);
-  torretaArriba.position.set(0, ALTO_TUBO + RADIO_TUBO + 0.009, 0.004);
-  grupo.add(torretaArriba);
-
-  // lente delantera y trasera, ahora con cuerpo visible
-  /* Sin lente delantera: igual que la ocular, un disco ahí tapaba
-     el camino de la vista. El tubo hueco ya se lee como óptica.  */
-
-  /* Sin lente ocular: un disco de color ahí tapaba justo por donde
-     miras. Se deja el hueco limpio y la cruceta hace todo el
-     trabajo — es lo que de verdad usas para apuntar.             */
-
-  /* La RETÍCULA: simplificada a propósito — antes traía 4 marcas de
-     rango además de la cruz, lo que la hacía verse "cargada", y las
-     líneas eran tan delgadas (1.6mm) que a la distancia ocular real
-     casi no se alcanzaban a ver. Ahora es solo una cruz gruesa y un
-     punto central — más simple, y de verdad visible al apuntar.
-     `depthTest: false` + `renderOrder` alto: así SIEMPRE se dibuja
-     encima de cualquier otra pieza que quede en medio (antes podía
-     quedar tapada por la campana trasera si la geometría se cruzaba
-     un poco, y entonces "no se veía la cruceta" al apuntar).       */
-  const MAT_RETICULA_VISIBLE = MAT_RETICULA.clone();
-  MAT_RETICULA_VISIBLE.depthTest = false;
-  const Z_RETICULA = 0.094;
-  // escalada junto con el tubo (que creció ~1.9x) para que siga
-  // viéndose proporcionada dentro del campo visual más grande
-  const cruzV = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.08, 0.0008), MAT_RETICULA_VISIBLE);
-  cruzV.position.set(0, ALTO_TUBO, Z_RETICULA);
-  cruzV.renderOrder = 999;
-  grupo.add(cruzV);
-  const cruzH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.006, 0.0008), MAT_RETICULA_VISIBLE);
-  cruzH.position.set(0, ALTO_TUBO, Z_RETICULA);
-  cruzH.renderOrder = 999;
-  grupo.add(cruzH);
-  const puntoCentro = new THREE.Mesh(new THREE.CircleGeometry(0.0042, 14), MAT_PUNTO_ROJO.clone());
-  puntoCentro.material.depthTest = false;
-  puntoCentro.position.set(0, ALTO_TUBO, Z_RETICULA + 0.0006);
-  puntoCentro.renderOrder = 1000;
-  grupo.add(puntoCentro);
-
-  // el ojo va en el lente ocular, mirando a lo largo del tubo
-  /* Distancia ocular real: antes el ojo quedaba a solo 1.4cm de la
-     boca del tubo — prácticamente tocándola. Con eso, CUALQUIER
-     ángulo que no fuera el centro exacto chocaba contra el borde
-     del tubo (verificado con una rejilla de rayos cubriendo el
-     campo de visión real: 100% bloqueado). Un visor de verdad
-     tiene 6-10cm de distancia ocular — con eso el ojo queda lo
-     bastante lejos como para que el borde del tubo no estorbe.
-     Pero 0.17 solo daba 7cm reales libres respecto al borde de la
-     campana trasera (que llega hasta z=0.1 local) — menos que el
-     plano near de la cámara (10cm) más colchón, así que la propia
-     campana se recortaba y se veía como un anillo gigante y
-     deformado llenando la pantalla. Con 0.26 quedan ~16cm — con margen extra para el empuje de retroceso al disparar apuntando.*/
-  return { grupo, puntoOcular: new THREE.Vector3(0, ALTO_TUBO, 0.26) };
-}
-
-const FABRICAS_MIRA = {
-  ninguna: miraNinguna, hierro: miraHierro, reflex: miraReflex,
-  holografica: miraHolografica, laser: miraLaser, telescopica: miraTelescopica,
-  prismatica: miraPrismatica,
-};
-
-/* ── bocas de cañón — se montan en la PUNTA real del cañón       ─
-   elegido (no en un punto fijo), así que reportan cuánto se
-   alargan, igual que los cañones reportan su propia longitud.  */
-
-function bocaNinguna() {
-  return { grupo: new THREE.Group(), longitudExtra: 0 };
-}
-
-function bocaRompellamas(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.055;
-  const radioBase = Math.max(0.018, radioPunta + 0.001);
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(radioBase, radioBase, 0.015, 10), MAT_METAL);
-  base.rotation.x = Math.PI / 2;
-  base.position.z = -0.008;
-  grupo.add(base);
-
-  // jaula abierta: barras delgadas en vez de un cilindro sólido —
-  // por eso se distingue tan claramente del compensador/silenciador
-  const NUM_BARRAS = 6;
-  const RADIO_BARRAS = Math.max(0.016, radioPunta - 0.001);
-  for (let i = 0; i < NUM_BARRAS; i++) {
-    const angulo = (i / NUM_BARRAS) * Math.PI * 2;
-    const barra = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, longitudExtra, 6), MAT_METAL);
-    barra.rotation.x = Math.PI / 2;   // el bug: sin esto quedaban paradas, no a lo largo del cañón
-    barra.position.set(
-      Math.cos(angulo) * RADIO_BARRAS,
-      Math.sin(angulo) * RADIO_BARRAS,
-      -longitudExtra / 2 - 0.014
+      MAT_ACERO
     );
-    grupo.add(barra);
-  }
-  const anilloFrontal = new THREE.Mesh(new THREE.TorusGeometry(RADIO_BARRAS, 0.0025, 6, 12), MAT_METAL);
-  anilloFrontal.position.z = -longitudExtra - 0.014;
-  grupo.add(anilloFrontal);
 
-  return { grupo, longitudExtra: longitudExtra + 0.014 };
+
+  mesh.rotation.x =
+    Math.PI / 2;
+
+
+  mesh.position.set(
+    x,
+    y,
+    z
+  );
+
+
+  grupo.add(
+    mesh
+  );
+
+
+  const ranura =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+        radio * 1.25,
+        0.0011,
+        0.0011
+      ),
+
+      MAT_INTERIOR
+    );
+
+
+  ranura.position.set(
+
+    x,
+
+    y,
+
+    z -
+    profundidad / 2 -
+    0.0006
+  );
+
+
+  grupo.add(
+    ranura
+  );
 }
 
-function bocaCompensador(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.045;
-  const radio = Math.max(0.021, radioPunta + 0.001);
-  /* Perfil torneado en vez de cilindro recto: collar de montaje
-     donde se une al cañón, cuerpo principal, y una leve conicidad
-     hacia la punta — como un compensador mecanizado de verdad. */
-  const cuerpo = torneado([
-    [0.006, radio * 0.82],
-    [0.006, radio],
-    [-0.008, radio],
-    [-longitudExtra * 0.5, radio * 0.98],
-    [-longitudExtra + 0.006, radio * 0.9],
-    [-longitudExtra, radio * 0.72],
-    [-longitudExtra, 0],
-  ], MAT_METAL, { segmentos: 14 });
-  cuerpo.position.z = 0;
-  grupo.add(cuerpo);
-  return { grupo, longitudExtra };
-}
 
-function bocaSilenciador(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.16;
-  const radio = Math.max(0.024, radioPunta + 0.001);
-  // extremos redondeados en vez de un tubo cortado a escuadra
-  const cuerpo = torneado(perfilSilenciador(longitudExtra, radio), MAT_METAL, { segmentos: 16 });
-  grupo.add(cuerpo);
-  // anillos de agarre — detalle que rompe la superficie lisa
-  for (let i = 1; i <= 3; i++) {
-    const anillo = new THREE.Mesh(new THREE.TorusGeometry(radio * 0.94, 0.0015, 6, 16), MAT_METAL_CLARO);
-    anillo.rotation.y = Math.PI / 2;
-    anillo.position.z = -longitudExtra * (i / 4);
-    grupo.add(anillo);
-  }
-  return { grupo, longitudExtra };
-}
 
-function bocaCompensadorPesado(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.07;
-  const radio = Math.max(0.026, radioPunta + 0.001);
-  // torneado, con un collar de montaje más ancho donde se une al
-  // cañón — antes era un cilindro recto sin ninguna transición
-  const cuerpo = torneado([
-    [0.006, radio * 0.78], [0.006, radio * 1.08], [-0.006, radio * 1.08],
-    [-0.01, radio], [-longitudExtra + 0.006, radio * 0.97],
-    [-longitudExtra, radio * 0.8], [-longitudExtra, 0],
-  ], MAT_METAL_CLARO, { segmentos: 12 });
-  grupo.add(cuerpo);
+function basePicatinny({
 
-  // ranuras de gas — dos filas de cortes, lo que más distingue
-  // a este del compensador simple (que es liso)
-  for (const z of [-0.02, -0.045]) {
-    for (const angulo of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-      const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.012, 0.006), MAT_LENTE_OSCURA);
-      ranura.position.set(Math.cos(angulo) * (radio + 0.001), Math.sin(angulo) * (radio + 0.001), z);
-      ranura.rotation.z = angulo;
-      grupo.add(ranura);
-    }
-  }
+  ancho =
+    0.042,
 
-  return { grupo, longitudExtra };
-}
+  largo =
+    0.060,
 
-/* Freno ranurado: perfil torneado con dos filas de ranuras
-   LARGAS a los costados (no cortes chicos como el compensador
-   pesado) — más parecido a un freno de competición real, con la
-   silueta abierta a los lados en vez de perforaciones redondas. */
-function bocaFrenoRanurado(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.06;
-  const radio = Math.max(0.022, radioPunta + 0.001);
-  const cuerpo = torneado([
-    [0.006, radio * 0.85], [0.006, radio], [-0.01, radio],
-    [-longitudExtra + 0.008, radio * 0.96], [-longitudExtra, radio * 0.7], [-longitudExtra, 0],
-  ], MAT_METAL, { segmentos: 14 });
-  grupo.add(cuerpo);
+  alto =
+    0.014,
 
-  // dos ranuras largas a cada lado, no perforaciones redondas —
-  // es lo que lo distingue de un vistazo del compensador pesado
-  for (const lado of [-1, 1]) {
-    for (const zCentro of [-0.018, -0.04]) {
-      const ranura = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.009, 0.02), MAT_LENTE_OSCURA);
-      ranura.position.set(lado * (radio * 0.7), 0, zCentro);
-      grupo.add(ranura);
-    }
-  }
-  return { grupo, longitudExtra };
-}
+} = {}) {
 
-/* Supresor integral: más largo y más grueso que el silenciador
-   normal, con más anillos de agarre — se lee como una pieza mucho
-   más seria/pesada, acorde a que controla el retroceso casi tanto
-   como el compensador pesado pero cuesta el alcance más alto del
-   juego.                                                          */
-function bocaSupresorIntegral(radioPunta = 0.017) {
-  const grupo = new THREE.Group();
-  const longitudExtra = 0.21;
-  const radio = Math.max(0.027, radioPunta + 0.0015);
-  const cuerpo = torneado(perfilSilenciador(longitudExtra, radio), MAT_METAL, { segmentos: 16 });
-  grupo.add(cuerpo);
-  for (let i = 1; i <= 4; i++) {
-    const anillo = new THREE.Mesh(new THREE.TorusGeometry(radio * 0.95, 0.0017, 6, 16), MAT_METAL_CLARO);
-    anillo.rotation.y = Math.PI / 2;
-    anillo.position.z = -longitudExtra * (i / 5);
-    grupo.add(anillo);
-  }
-  return { grupo, longitudExtra };
-}
+  const grupo =
+    new THREE.Group();
 
-const FABRICAS_BOCA = {
-  ninguna: bocaNinguna, rompellamas: bocaRompellamas,
-  compensador: bocaCompensador, silenciador: bocaSilenciador,
-  compensadorPesado: bocaCompensadorPesado, frenoRanurado: bocaFrenoRanurado,
-  supresorIntegral: bocaSupresorIntegral,
-};
 
-/* ── empuñaduras inferiores — se montan bajo el cañón,          ─
-   en el punto de empuñadura del cuerpo (independiente de la
-   boca de cañón, que va en la punta)                            */
+  const base =
+    cajaBiselada(
 
-function empuñaduraNinguna() {
-  return new THREE.Group();
-}
+      ancho,
 
-function empuñaduraVertical() {
-  const grupo = new THREE.Group();
-  const cuerpo = cajaBiselada(0.028, 0.06, 0.03, MAT_GRIP, 0.004);
-  cuerpo.position.y = -0.03;
-  grupo.add(cuerpo);
-  texturaAgarreDiseno(grupo, { x:0, y:-0.03, z:0, ancho:0.024, alto:0.05, filas:5, columnas:3 });
+      alto,
+
+      largo,
+
+      MAT_METAL,
+
+      0.003
+    );
+
+
+  base.position.y =
+    -alto / 2 +
+    0.002;
+
+
+  grupo.add(
+    base
+  );
+
+
+  const mordazaIzq =
+    cajaBiselada(
+
+      0.008,
+
+      0.010,
+
+      largo * 0.88,
+
+      MAT_METAL_2,
+
+      0.002
+    );
+
+
+  mordazaIzq.position.set(
+
+    -ancho / 2 +
+    0.004,
+
+    -alto -
+    0.002,
+
+    0
+  );
+
+
+  grupo.add(
+    mordazaIzq
+  );
+
+
+  const mordazaDer =
+    mordazaIzq.clone();
+
+
+  mordazaDer.position.x =
+
+    ancho / 2 -
+    0.004;
+
+
+  grupo.add(
+    mordazaDer
+  );
+
+
+  tornillo(
+
+    grupo,
+
+    ancho / 2 +
+    0.004,
+
+    -alto * 0.55,
+
+    0,
+
+    0.0035,
+
+    0.004
+  );
+
+
   return grupo;
 }
 
-function empuñaduraAngulada() {
-  const grupo = new THREE.Group();
-  const cuerpo = cajaBiselada(0.026, 0.05, 0.032, MAT_GRIP, 0.0035);
-  cuerpo.position.y = -0.024;
-  cuerpo.rotation.x = 0.5;   // angulada hacia adelante — perfil distinto a la vertical
-  grupo.add(cuerpo);
+
+
+function marcoRectangularAbierto({
+
+  ancho,
+
+  alto,
+
+  profundo,
+
+  grosor,
+
+  material =
+    MAT_METAL,
+
+}) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const superior =
+    cajaBiselada(
+
+      ancho,
+
+      grosor,
+
+      profundo,
+
+      material,
+
+      Math.min(
+        0.003,
+        grosor / 3
+      )
+    );
+
+
+  superior.position.y =
+
+    alto / 2
+
+    -
+
+    grosor / 2;
+
+
+  grupo.add(
+    superior
+  );
+
+
+  const inferior =
+    superior.clone();
+
+
+  inferior.position.y =
+
+    -alto / 2
+
+    +
+
+    grosor / 2;
+
+
+  grupo.add(
+    inferior
+  );
+
+
+  const lateralIzq =
+    cajaBiselada(
+
+      grosor,
+
+      alto -
+      grosor * 2,
+
+      profundo,
+
+      material,
+
+      Math.min(
+        0.003,
+        grosor / 3
+      )
+    );
+
+
+  lateralIzq.position.x =
+
+    -ancho / 2
+
+    +
+
+    grosor / 2;
+
+
+  grupo.add(
+    lateralIzq
+  );
+
+
+  const lateralDer =
+    lateralIzq.clone();
+
+
+  lateralDer.position.x =
+
+    ancho / 2
+
+    -
+
+    grosor / 2;
+
+
+  grupo.add(
+    lateralDer
+  );
+
+
   return grupo;
 }
 
-function empuñaduraBipode() {
-  const grupo = new THREE.Group();
-  const base = cajaBiselada(0.024, 0.014, 0.03, MAT_METAL, 0.002);
-  grupo.add(base);
-  // dos patas plegables en ángulo — lo que más distingue al bípode
-  // de cualquier otra empuñadura
-  for (const lado of [-1, 1]) {
-    const pata = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.0035, 0.075, 6), MAT_METAL);
-    pata.position.set(lado * 0.02, -0.04, 0);
-    pata.rotation.z = lado * 0.35;
-    grupo.add(pata);
-    const pie = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.006, 8), MAT_GRIP);
-    pie.position.set(lado * 0.045, -0.075, 0);
-    grupo.add(pie);
+
+
+function tuboHueco({
+
+  radio,
+
+  largo,
+
+  material =
+    MAT_METAL,
+
+  segmentos =
+    24,
+
+}) {
+
+  const mat =
+    material.clone();
+
+
+  mat.side =
+    THREE.DoubleSide;
+
+
+  const mesh =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+
+        radio,
+
+        radio,
+
+        largo,
+
+        segmentos,
+
+        1,
+
+        true
+      ),
+
+      mat
+    );
+
+
+  mesh.rotation.x =
+    Math.PI / 2;
+
+
+  return mesh;
+}
+
+
+
+function anilloOptico(
+
+  radio,
+
+  tubo =
+    0.0032,
+
+  material =
+    MAT_AZUL_OPTICO
+
+) {
+
+  return new THREE.Mesh(
+
+    new THREE.TorusGeometry(
+      radio,
+      tubo,
+      8,
+      28
+    ),
+
+    material
+  );
+}
+
+
+
+function reticulaCruz(
+
+  grupo,
+
+  z,
+
+  radio =
+    0.018,
+
+  color =
+    'rojo',
+
+  y =
+    0
+
+) {
+
+  const mat =
+
+    color ===
+    'verde'
+
+      ? MAT_RETICULA_VERDE
+
+      : MAT_RETICULA_ROJA;
+
+
+  const h =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+
+        radio * 1.55,
+
+        0.0016,
+
+        0.0016
+      ),
+
+      mat
+    );
+
+
+  h.position.set(
+    0,
+    y,
+    z
+  );
+
+
+  grupo.add(
+    h
+  );
+
+
+  const v =
+    new THREE.Mesh(
+
+      new THREE.BoxGeometry(
+
+        0.0016,
+
+        radio * 1.55,
+
+        0.0016
+      ),
+
+      mat
+    );
+
+
+  v.position.set(
+    0,
+    y,
+    z
+  );
+
+
+  grupo.add(
+    v
+  );
+
+
+  const punto =
+    new THREE.Mesh(
+
+      new THREE.SphereGeometry(
+        0.0023,
+        10,
+        8
+      ),
+
+      mat
+    );
+
+
+  punto.position.set(
+    0,
+    y,
+    z - 0.001
+  );
+
+
+  grupo.add(
+    punto
+  );
+}
+
+
+
+function puntoRojo(
+
+  grupo,
+
+  x,
+
+  y,
+
+  z,
+
+  radio =
+    0.0026
+
+) {
+
+  const p =
+    new THREE.Mesh(
+
+      new THREE.SphereGeometry(
+        radio,
+        10,
+        8
+      ),
+
+      MAT_RETICULA_ROJA
+    );
+
+
+  p.position.set(
+    x,
+    y,
+    z
+  );
+
+
+  grupo.add(
+    p
+  );
+}
+
+
+
+function bandaEstriada(
+
+  grupo,
+
+  z,
+
+  radio,
+
+  cantidad =
+    18,
+
+  largo =
+    0.010
+
+) {
+
+  for (
+    let i = 0;
+    i < cantidad;
+    i++
+  ) {
+
+    const a =
+
+      (
+        i /
+        cantidad
+      )
+
+      *
+
+      Math.PI *
+      2;
+
+
+    const e =
+      new THREE.Mesh(
+
+        new THREE.BoxGeometry(
+          0.0028,
+          0.0028,
+          largo
+        ),
+
+        MAT_ACERO
+      );
+
+
+    e.position.set(
+
+      Math.cos(a) *
+      radio,
+
+      Math.sin(a) *
+      radio,
+
+      z
+    );
+
+
+    e.rotation.z =
+      a;
+
+
+    grupo.add(
+      e
+    );
   }
-  return grupo;
 }
 
-/* Tope de mano: mucho más corto que una empuñadura vertical, sin
-   forma de sostener toda la mano — solo un tope contra el que
-   apoyar la palma, con textura de agarre en el frente.          */
-function empuñaduraTopeMano() {
-  const grupo = new THREE.Group();
-  const cuerpo = cajaBiselada(0.03, 0.024, 0.026, MAT_GRIP, 0.004);
-  cuerpo.position.y = -0.012;
-  grupo.add(cuerpo);
-  texturaAgarreDiseno(grupo, { x: 0, y: -0.012, z: 0.011, ancho: 0.024, alto: 0.018, filas: 3, columnas: 3 });
-  return grupo;
-}
 
-/* Empuñadura corta de combate: más chica incluso que el tope de
-   mano, sin textura de agarre — un nub mínimo, acorde a que es la
-   pieza que menos controla el retroceso de las cinco (casi como no
-   traer nada), a cambio de ser la más ligera y la única que agiliza
-   el apuntado en vez de solo no penalizarlo.                      */
-function empuñaduraCortaCombate() {
-  const grupo = new THREE.Group();
-  const cuerpo = cajaBiselada(0.024, 0.016, 0.02, MAT_GRIP, 0.003);
-  cuerpo.position.y = -0.009;
-  grupo.add(cuerpo);
-  return grupo;
-}
 
-const FABRICAS_EMPUÑADURA = {
-  ninguna: empuñaduraNinguna, vertical: empuñaduraVertical,
-  angulada: empuñaduraAngulada, bipode: empuñaduraBipode,
-  topeMano: empuñaduraTopeMano, cortaCombate: empuñaduraCortaCombate,
-};
+function ranuraOscura(
 
-/* ── ensamblado final ─────────────────────────────────────────
-   Recibe las CLAVES elegidas (strings como 'pistola', 'largo' —
-   no los objetos de estadísticas de piezas.js) y arma el grupo
-   3D completo, ya posicionado pieza por pieza según los puntos
-   de anclaje del cuerpo elegido.                                */
-export function construirModeloArma({ cuerpo, cañon, cargador, mira, boca, empuñadura, acabado }) {
-  const fabricaCuerpo = FABRICAS_CUERPO[cuerpo] || FABRICAS_CUERPO.pistola;
-  const fabricaCañon = FABRICAS_CAÑON[cañon] || FABRICAS_CAÑON.estandar;
-  const fabricaCargador = FABRICAS_CARGADOR[cargador] || FABRICAS_CARGADOR.medio;
-  const fabricaMira = FABRICAS_MIRA[mira] || FABRICAS_MIRA.ninguna;
-  const fabricaBoca = FABRICAS_BOCA[boca] || FABRICAS_BOCA.ninguna;
-  const fabricaEmpuñadura = FABRICAS_EMPUÑADURA[empuñadura] || FABRICAS_EMPUÑADURA.ninguna;
+  grupo,
 
-  const grupo = new THREE.Group();
+  {
 
-  const partesCuerpo = fabricaCuerpo();
-  grupo.add(partesCuerpo.grupo);
+    x,
 
-  const partesCañon = fabricaCañon();
-  partesCañon.grupo.position.copy(partesCuerpo.puntoCañon);
-  grupo.add(partesCañon.grupo);
+    y,
 
-  const cargadorMesh = fabricaCargador();
-  cargadorMesh.position.add(partesCuerpo.puntoCargador);
-  grupo.add(cargadorMesh);
+    z,
 
-  // la punta REAL del cañón elegido — se necesita ANTES de armar
-  // la mira, porque el poste delantero de la mira de hierro debe
-  // colocarse ahí (antes estaba en una posición fija sin importar
-  // el cañón, y con uno largo quedaba 27cm atrás de la punta real)
-  const puntaCañonBase = partesCuerpo.puntoCañon.clone();
-  puntaCañonBase.z -= partesCañon.longitud;
-  // convertido al espacio LOCAL de la mira: la mira se agrega en
-  // puntoMira, así que su punto delantero debe compensar esa resta
-  const puntaCañonLocalAMira = puntaCañonBase.clone().sub(partesCuerpo.puntoMira);
+    ancho,
 
-  const partesMira = fabricaMira(puntaCañonLocalAMira, partesCuerpo.huecoMira);
-  partesMira.grupo.position.add(partesCuerpo.puntoMira);
-  grupo.add(partesMira.grupo);
+    alto,
 
-  const empuñaduraMesh = fabricaEmpuñadura();
-  empuñaduraMesh.position.add(partesCuerpo.puntoEmpuñadura);
-  grupo.add(empuñaduraMesh);
+    profundo,
 
-  // la boca de cañón también se monta en la punta real
-  // la boca también recibe el radio real de la punta — antes tenía
-  // un radio fijo, y con el cañón pesado (el más grueso) quedaba
-  // hasta 25% más angosta que el cañón, viéndose claramente rota
-  const partesBoca = fabricaBoca(partesCañon.radioPunta);
-  partesBoca.grupo.position.copy(puntaCañonBase);
-  grupo.add(partesBoca.grupo);
+    rotZ =
+      0,
 
-  grupo.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-
-  // el acabado recolorea SOLO este modelo — nunca el material
-  // compartido, o cambiaría todas las armas del juego a la vez
-  if (acabado && acabado !== 'fabrica' && ACABADOS[acabado]) {
-    aplicarAcabado(grupo, ACABADOS[acabado].color);
   }
 
-  const puntaCañon = puntaCañonBase.clone();
-  puntaCañon.z -= partesBoca.longitudExtra;
+) {
 
-  // dónde va tu ojo al apuntar — el punto de montaje de la mira
-  // MÁS el punto ocular propio de esa mira específica. Partiendo de
-  // ahí, arma.js movería TODA el arma para que ese punto exacto
-  // quedara frente a la cámara — pero eso podía empujar partes
-  // traseras del arma (el grip, sobre todo en armas grandes) hasta
-  // quedar DETRÁS de la cámara, viéndose como si la atravesaras.
-  const puntoOcular = partesCuerpo.puntoMira.clone().add(partesMira.puntoOcular);
+  const r =
+    cajaBiselada(
 
-  /* Qué tan cerca de la cámara puede quedar CUALQUIER pieza del
-     arma sin que se recorte contra el plano near de la cámara
-     (0.1, ver core/mundo.js). Todo lo que NO sea culata cuenta —
-     los intentos anteriores intentaban adivinar "hasta dónde llega
-     lo que importa" con un número fijo (la zona de la empuñadura
-     accesoria, luego la del grip): ese número SIEMPRE terminaba
-     excluyendo por accidente algo real. Primero la carcasa de las
-     miras de poco zoom (reflex/holográfica/prismática/telescópica
-     — arregladas subiendo su propia distancia ocular). Después las
-     estrías de la corredera de una pistola SIN mira: un arma corta
-     no tiene "zona de grip" que sirva de corte, casi todo su
-     cuerpo cae detrás de cualquier límite fijo razonable, así que
-     el escaneo nunca las veía.
+      ancho,
 
-     Ahora la única pieza que se excluye es la que está marcada
-     EXPLÍCITAMENTE como culata (ver userData.esCulata en cada
-     cuerpoXxx que la tiene — subfusil, rifle, escopeta, lmg,
-     francotirador). Todo lo demás, sin excepción ni suposición de
-     dónde "debería" estar el corte, tiene que quedar a una
-     distancia segura de la cámara.
+      alto,
 
-     El margen incluye colchón para el empujón de retroceso al
-     disparar apuntando (ver arma.js): en el peor caso (el arma de
-     más retroceso del juego, en ráfaga sostenida) ese empujón es
-     de hasta ~2cm — el margen de aquí ya lo cubre.                */
-  const NEAR = 0.1;
-  const MARGEN_SEGURIDAD_Z = -(NEAR + 0.05);   // -0.15: near + colchón + reserva de retroceso
+      profundo,
 
-  let zMasAtras = -Infinity;
-  grupo.traverse((o) => {
-    if (!o.isMesh || o.userData.esCulata) return;
-    const caja = new THREE.Box3().setFromObject(o);
-    if (caja.max.z > zMasAtras) zMasAtras = caja.max.z;
-  });
-  if (zMasAtras === -Infinity) zMasAtras = 0;
+      MAT_INTERIOR,
 
-  const posApuntando = puntoOcular.clone().negate();
-  const zFinalPuntoMasAtras = zMasAtras + posApuntando.z;
-  if (zFinalPuntoMasAtras > MARGEN_SEGURIDAD_Z) {
-    posApuntando.z -= (zFinalPuntoMasAtras - MARGEN_SEGURIDAD_Z);
-  }
+      Math.min(
 
-  return { grupo, puntaCañon, puntoOcular, posApuntando };
+        0.002,
+
+        ancho / 5,
+
+        alto / 5,
+
+        profundo / 5
+      )
+    );
+
+
+  r.position.set(
+    x,
+    y,
+    z
+  );
+
+
+  r.rotation.z =
+    rotZ;
+
+
+  grupo.add(
+    r
+  );
 }
 
-/* Clona y recolorea solo los materiales metálicos DE ESTE grupo —
-   identificados por referencia a los materiales compartidos, no
-   por nombre ni por color (así funciona sin importar qué piezas
-   se hayan combinado).                                           */
-function aplicarAcabado(grupo, colorHex) {
-  const colorBase = new THREE.Color(colorHex);
-  const colorClaro = colorBase.clone().lerp(new THREE.Color(0xffffff), 0.22);
-  grupo.traverse((o) => {
-    if (!o.isMesh) return;
-    if (o.material === MAT_METAL) {
-      o.material = MAT_METAL.clone();
-      o.material.color.copy(colorBase);
-    } else if (o.material === MAT_METAL_CLARO) {
-      o.material = MAT_METAL_CLARO.clone();
-      o.material.color.copy(colorClaro);
-    }
-  });
-}
 
-/* Libera la geometría/materiales de un modelo que ya no se usa —
-   evita fugas de memoria cada vez que cambias de arma en la mesa. */
-export function liberarModeloArma(modelo) {
-  modelo.grupo.traverse((o) => {
-    if (o.isMesh) {
-      o.geometry.dispose();
-      // los materiales compartidos (MAT_METAL, etc.) NO se liberan
-      // aquí a propósito — los sigue usando el resto de armas. Los
-      // materiales CLONADOS por un acabado sí son exclusivos de
-      // este modelo, así que también se liberan.
-      if (o.material && o.material !== MAT_METAL && o.material !== MAT_METAL_CLARO
-        && o.material !== MAT_GRIP && o.material !== MAT_LENTE_ROJA
-        && o.material !== MAT_LENTE_ESCOPE && o.material !== MAT_LENTE_OSCURA) {
-        o.material.dispose();
+
+function limpiarGeometrias(
+  obj
+) {
+
+  obj.traverse(
+    n => {
+
+      if (
+        n.isMesh
+      ) {
+
+        n.geometry
+          ?.dispose?.();
       }
     }
-  });
+  );
+}
+
+
+
+/* ═══════════════════════════════════
+   CARGADORES
+═══════════════════════════════════ */
+
+function cargadorCaja({
+
+  alto,
+
+  ancho,
+
+  profundo,
+
+  inclinacion =
+    0.05,
+
+  curvatura =
+    0,
+
+  nervios =
+    3,
+
+}) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const h =
+    alto / 2;
+
+
+  const p =
+    profundo / 2;
+
+
+  const perfil = [
+
+    [
+      -p * 0.86,
+      h
+    ],
+
+    [
+      p * 0.86,
+      h
+    ],
+
+    [
+      p,
+      h * 0.45
+    ],
+
+    [
+      p *
+      (
+        0.90 +
+        curvatura
+      ),
+
+      -h * 0.45
+    ],
+
+    [
+      p * 0.65,
+      -h
+    ],
+
+    [
+      -p * 0.72,
+      -h
+    ],
+
+    [
+      -p *
+      (
+        0.95 -
+        curvatura
+      ),
+
+      -h * 0.35
+    ],
+
+    [
+      -p,
+      h * 0.40
+    ],
+  ];
+
+
+  const cuerpo =
+    perfilExtruido(
+
+      perfil,
+
+      ancho,
+
+      MAT_METAL,
+
+      {
+        bisel:
+          0.004,
+
+        curvaBisel:
+          3,
+      }
+    );
+
+
+  cuerpo.rotation.x =
+    inclinacion;
+
+
+  cuerpo.position.y =
+    -alto / 2;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const base =
+    cajaBiselada(
+
+      ancho * 1.08,
+
+      0.010,
+
+      profundo * 1.10,
+
+      MAT_POLIMERO,
+
+      0.003
+    );
+
+
+  base.position.y =
+    -alto -
+    0.004;
+
+
+  base.rotation.x =
+    inclinacion;
+
+
+  grupo.add(
+    base
+  );
+
+
+  const labio =
+    cajaBiselada(
+
+      ancho * 0.90,
+
+      0.012,
+
+      profundo * 0.82,
+
+      MAT_ACERO,
+
+      0.002
+    );
+
+
+  labio.position.y =
+    -0.004;
+
+
+  grupo.add(
+    labio
+  );
+
+
+  for (
+    let i = 0;
+    i < nervios;
+    i++
+  ) {
+
+    const y =
+
+      -alto
+
+      *
+
+      (
+        0.25 +
+        i * 0.18
+      );
+
+
+    const nervio =
+      cajaBiselada(
+
+        ancho +
+        0.002,
+
+        0.007,
+
+        profundo *
+        0.90,
+
+        MAT_METAL_2,
+
+        0.002
+      );
+
+
+    nervio.position.y =
+      y;
+
+
+    nervio.rotation.x =
+      inclinacion;
+
+
+    grupo.add(
+      nervio
+    );
+  }
+
+
+  return grupo;
+}
+
+
+
+function crearCargadorUltra(
+  clave
+) {
+
+  let grupo;
+
+
+  switch (
+    clave
+  ) {
+
+    case 'pequeño':
+
+      grupo =
+        cargadorCaja({
+
+          alto:
+            0.085,
+
+          ancho:
+            0.034,
+
+          profundo:
+            0.038,
+
+          inclinacion:
+            0.035,
+
+          curvatura:
+            0.02,
+
+          nervios:
+            2,
+        });
+
+      break;
+
+
+    case 'grande':
+
+      grupo =
+        cargadorCaja({
+
+          alto:
+            0.165,
+
+          ancho:
+            0.040,
+
+          profundo:
+            0.052,
+
+          inclinacion:
+            0.10,
+
+          curvatura:
+            0.14,
+
+          nervios:
+            5,
+        });
+
+      break;
+
+
+    case 'tambor': {
+
+      grupo =
+        new THREE.Group();
+
+
+      const cuello =
+        cargadorCaja({
+
+          alto:
+            0.045,
+
+          ancho:
+            0.036,
+
+          profundo:
+            0.042,
+
+          inclinacion:
+            0.03,
+
+          nervios:
+            1,
+        });
+
+
+      grupo.add(
+        cuello
+      );
+
+
+      const tambor =
+        new THREE.Mesh(
+
+          new THREE.CylinderGeometry(
+            0.058,
+            0.058,
+            0.044,
+            28
+          ),
+
+          MAT_METAL
+        );
+
+
+      tambor.rotation.z =
+        Math.PI / 2;
+
+
+      tambor.position.set(
+        0,
+        -0.090,
+        0.003
+      );
+
+
+      grupo.add(
+        tambor
+      );
+
+
+      const tapaL =
+        new THREE.Mesh(
+
+          new THREE.CylinderGeometry(
+            0.049,
+            0.049,
+            0.004,
+            28
+          ),
+
+          MAT_METAL_2
+        );
+
+
+      tapaL.rotation.z =
+        Math.PI / 2;
+
+
+      tapaL.position.set(
+        -0.024,
+        -0.090,
+        0.003
+      );
+
+
+      grupo.add(
+        tapaL
+      );
+
+
+      const tapaR =
+        tapaL.clone();
+
+
+      tapaR.position.x =
+        0.024;
+
+
+      grupo.add(
+        tapaR
+      );
+
+
+      const centro =
+        new THREE.Mesh(
+
+          new THREE.CylinderGeometry(
+            0.010,
+            0.010,
+            0.050,
+            14
+          ),
+
+          MAT_ACERO
+        );
+
+
+      centro.rotation.z =
+        Math.PI / 2;
+
+
+      centro.position.set(
+        0,
+        -0.090,
+        0.003
+      );
+
+
+      grupo.add(
+        centro
+      );
+
+
+      for (
+        let i = 0;
+        i < 8;
+        i++
+      ) {
+
+        const a =
+
+          (
+            i /
+            8
+          )
+
+          *
+
+          Math.PI *
+          2;
+
+
+        const rem =
+          new THREE.Mesh(
+
+            new THREE.SphereGeometry(
+              0.0027,
+              8,
+              6
+            ),
+
+            MAT_ACERO
+          );
+
+
+        rem.position.set(
+
+          -0.025,
+
+          -0.090 +
+          Math.sin(a) *
+          0.039,
+
+          0.003 +
+          Math.cos(a) *
+          0.039
+        );
+
+
+        grupo.add(
+          rem
+        );
+      }
+
+      break;
+    }
+
+
+    case 'medio':
+
+    default:
+
+      grupo =
+        cargadorCaja({
+
+          alto:
+            0.122,
+
+          ancho:
+            0.037,
+
+          profundo:
+            0.046,
+
+          inclinacion:
+            0.07,
+
+          curvatura:
+            0.08,
+
+          nervios:
+            3,
+        });
+
+      break;
+  }
+
+
+  return marcarUltra(
+
+    grupo,
+
+    `cargador_${clave}`
+  );
+}
+
+
+
+/* ═══════════════════════════════════
+   MIRAS
+═══════════════════════════════════ */
+
+function miraNingunaUltra() {
+
+  return {
+
+    grupo:
+      marcarUltra(
+        new THREE.Group(),
+        'mira_ninguna'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.020,
+        0.050
+      ),
+  };
+}
+
+
+
+function miraHierroUltra(
+  puntaCañonLocal
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.034,
+
+      largo:
+        0.030,
+
+      alto:
+        0.010,
+    });
+
+
+  base.position.z =
+    0.025;
+
+
+  grupo.add(
+    base
+  );
+
+
+  const puente =
+    cajaBiselada(
+
+      0.034,
+
+      0.006,
+
+      0.010,
+
+      MAT_METAL_2,
+
+      0.002
+    );
+
+
+  puente.position.set(
+    0,
+    0.014,
+    0.025
+  );
+
+
+  grupo.add(
+    puente
+  );
+
+
+  for (
+    const x
+    of [-0.013, 0.013]
+  ) {
+
+    const oreja =
+      cajaBiselada(
+
+        0.006,
+
+        0.026,
+
+        0.010,
+
+        MAT_METAL,
+
+        0.002
+      );
+
+
+    oreja.position.set(
+      x,
+      0.027,
+      0.025
+    );
+
+
+    grupo.add(
+      oreja
+    );
+  }
+
+
+  const inserto =
+    cajaBiselada(
+
+      0.020,
+
+      0.004,
+
+      0.004,
+
+      MAT_INTERIOR,
+
+      0.001
+    );
+
+
+  inserto.position.set(
+    0,
+    0.026,
+    0.020
+  );
+
+
+  grupo.add(
+    inserto
+  );
+
+
+  const puntaZ =
+
+    puntaCañonLocal
+      ?.z
+
+    ??
+
+    -0.18;
+
+
+  const alturaCanon =
+
+    puntaCañonLocal
+      ?.y
+
+    ??
+
+    -0.045;
+
+
+  const alturaLinea =
+    0.029;
+
+
+  const torreAlto =
+
+    Math.max(
+
+      0.020,
+
+      alturaLinea -
+      alturaCanon
+    );
+
+
+  const torre =
+    cajaBiselada(
+
+      0.010,
+
+      torreAlto,
+
+      0.012,
+
+      MAT_METAL,
+
+      0.002
+    );
+
+
+  torre.position.set(
+
+    0,
+
+    alturaCanon +
+    torreAlto / 2,
+
+    puntaZ +
+    0.012
+  );
+
+
+  grupo.add(
+    torre
+  );
+
+
+  const poste =
+    cajaBiselada(
+
+      0.004,
+
+      0.018,
+
+      0.005,
+
+      MAT_ACERO,
+
+      0.001
+    );
+
+
+  poste.position.set(
+
+    0,
+
+    alturaLinea +
+    0.006,
+
+    puntaZ +
+    0.012
+  );
+
+
+  grupo.add(
+    poste
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_hierro'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.029,
+        0.110
+      ),
+  };
+}
+
+
+
+function miraReflexUltra() {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.044,
+
+      largo:
+        0.060,
+
+      alto:
+        0.013,
+    });
+
+
+  grupo.add(
+    base
+  );
+
+
+  const soporte =
+    cajaBiselada(
+
+      0.038,
+
+      0.017,
+
+      0.045,
+
+      MAT_METAL_2,
+
+      0.004
+    );
+
+
+  soporte.position.set(
+    0,
+    0.016,
+    0
+  );
+
+
+  grupo.add(
+    soporte
+  );
+
+
+  /*
+    VENTANA ABIERTA.
+
+    No hay plano transparente.
+  */
+
+  const marco =
+    marcoRectangularAbierto({
+
+      ancho:
+        0.054,
+
+      alto:
+        0.045,
+
+      profundo:
+        0.012,
+
+      grosor:
+        0.007,
+
+      material:
+        MAT_METAL,
+    });
+
+
+  marco.position.set(
+    0,
+    0.048,
+    -0.010
+  );
+
+
+  grupo.add(
+    marco
+  );
+
+
+  const frenteAzul =
+    marcoRectangularAbierto({
+
+      ancho:
+        0.041,
+
+      alto:
+        0.032,
+
+      profundo:
+        0.003,
+
+      grosor:
+        0.0025,
+
+      material:
+        MAT_AZUL_OPTICO,
+    });
+
+
+  frenteAzul.position.set(
+    0,
+    0.048,
+    -0.017
+  );
+
+
+  grupo.add(
+    frenteAzul
+  );
+
+
+  puntoRojo(
+
+    grupo,
+
+    0,
+
+    0.048,
+
+    -0.021,
+
+    0.0025
+  );
+
+
+  const bateria =
+    cajaBiselada(
+
+      0.017,
+
+      0.020,
+
+      0.028,
+
+      MAT_POLIMERO,
+
+      0.004
+    );
+
+
+  bateria.position.set(
+    0.027,
+    0.025,
+    0.008
+  );
+
+
+  grupo.add(
+    bateria
+  );
+
+
+  tornillo(
+
+    grupo,
+
+    0.036,
+
+    0.025,
+
+    0.008,
+
+    0.003,
+
+    0.003
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_reflex'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.048,
+        0.165
+      ),
+  };
+}
+
+
+
+function miraHolograficaUltra() {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.050,
+
+      largo:
+        0.088,
+
+      alto:
+        0.015,
+    });
+
+
+  grupo.add(
+    base
+  );
+
+
+  const cuerpo =
+    cajaBiselada(
+
+      0.050,
+
+      0.033,
+
+      0.075,
+
+      MAT_METAL,
+
+      0.006
+    );
+
+
+  cuerpo.position.set(
+    0,
+    0.025,
+    0.004
+  );
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const ventana =
+    marcoRectangularAbierto({
+
+      ancho:
+        0.056,
+
+      alto:
+        0.052,
+
+      profundo:
+        0.018,
+
+      grosor:
+        0.008,
+
+      material:
+        MAT_METAL_2,
+    });
+
+
+  ventana.position.set(
+    0,
+    0.066,
+    -0.012
+  );
+
+
+  grupo.add(
+    ventana
+  );
+
+
+  const aroInterno =
+    marcoRectangularAbierto({
+
+      ancho:
+        0.041,
+
+      alto:
+        0.037,
+
+      profundo:
+        0.003,
+
+      grosor:
+        0.0025,
+
+      material:
+        MAT_AZUL_OPTICO,
+    });
+
+
+  aroInterno.position.set(
+    0,
+    0.066,
+    -0.022
+  );
+
+
+  grupo.add(
+    aroInterno
+  );
+
+
+  const reticulaAro =
+    new THREE.Mesh(
+
+      new THREE.TorusGeometry(
+        0.011,
+        0.0012,
+        6,
+        24
+      ),
+
+      MAT_RETICULA_ROJA
+    );
+
+
+  reticulaAro.position.set(
+    0,
+    0.066,
+    -0.025
+  );
+
+
+  grupo.add(
+    reticulaAro
+  );
+
+
+  puntoRojo(
+    grupo,
+    0,
+    0.066,
+    -0.026,
+    0.0020
+  );
+
+
+  const moduloLateral =
+    cajaBiselada(
+
+      0.012,
+
+      0.028,
+
+      0.054,
+
+      MAT_POLIMERO,
+
+      0.003
+    );
+
+
+  moduloLateral.position.set(
+    -0.031,
+    0.029,
+    0.008
+  );
+
+
+  grupo.add(
+    moduloLateral
+  );
+
+
+  for (
+    const z
+    of [-0.012, 0.008, 0.028]
+  ) {
+
+    const boton =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          0.0033,
+          0.0033,
+          0.003,
+          10
+        ),
+
+        MAT_GOMA
+      );
+
+
+    boton.rotation.z =
+      Math.PI / 2;
+
+
+    boton.position.set(
+      -0.038,
+      0.029,
+      z
+    );
+
+
+    grupo.add(
+      boton
+    );
+  }
+
+
+  tornillo(
+    grupo,
+    0.027,
+    0.027,
+    0.026,
+    0.003,
+    0.003
+  );
+
+
+  tornillo(
+    grupo,
+    0.027,
+    0.027,
+    -0.020,
+    0.003,
+    0.003
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_holografica'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.066,
+        0.185
+      ),
+  };
+}
+
+
+
+function miraLaserUltra() {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.034,
+
+      largo:
+        0.060,
+
+      alto:
+        0.012,
+    });
+
+
+  grupo.add(
+    base
+  );
+
+
+  const carcasa =
+    cajaBiselada(
+
+      0.034,
+
+      0.026,
+
+      0.070,
+
+      MAT_POLIMERO,
+
+      0.005
+    );
+
+
+  carcasa.position.set(
+    0,
+    0.021,
+    -0.003
+  );
+
+
+  grupo.add(
+    carcasa
+  );
+
+
+  const frente =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.009,
+        0.009,
+        0.008,
+        16
+      ),
+
+      MAT_METAL_2
+    );
+
+
+  frente.rotation.x =
+    Math.PI / 2;
+
+
+  frente.position.set(
+    0,
+    0.021,
+    -0.041
+  );
+
+
+  grupo.add(
+    frente
+  );
+
+
+  const emisor =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.0055,
+        0.0055,
+        0.0025,
+        16
+      ),
+
+      MAT_RETICULA_ROJA
+    );
+
+
+  emisor.rotation.x =
+    Math.PI / 2;
+
+
+  emisor.position.set(
+    0,
+    0.021,
+    -0.046
+  );
+
+
+  grupo.add(
+    emisor
+  );
+
+
+  const tapa =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.008,
+        0.008,
+        0.006,
+        14
+      ),
+
+      MAT_METAL_2
+    );
+
+
+  tapa.position.set(
+    0.020,
+    0.024,
+    0.010
+  );
+
+
+  tapa.rotation.z =
+    Math.PI / 2;
+
+
+  grupo.add(
+    tapa
+  );
+
+
+  tornillo(
+    grupo,
+    -0.019,
+    0.020,
+    -0.018,
+    0.003,
+    0.003
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_laser'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.026,
+        0.160
+      ),
+  };
+}
+
+
+
+function miraPrismaticaUltra() {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.046,
+
+      largo:
+        0.095,
+
+      alto:
+        0.015,
+    });
+
+
+  grupo.add(
+    base
+  );
+
+
+  const montura =
+    cajaBiselada(
+
+      0.036,
+
+      0.030,
+
+      0.070,
+
+      MAT_METAL_2,
+
+      0.005
+    );
+
+
+  montura.position.set(
+    0,
+    0.027,
+    0
+  );
+
+
+  grupo.add(
+    montura
+  );
+
+
+  const tubo =
+    tuboHueco({
+
+      radio:
+        0.025,
+
+      largo:
+        0.105,
+
+      material:
+        MAT_METAL,
+
+      segmentos:
+        24,
+    });
+
+
+  tubo.position.set(
+    0,
+    0.058,
+    0
+  );
+
+
+  grupo.add(
+    tubo
+  );
+
+
+  const aroTrasero =
+    anilloOptico(
+      0.025,
+      0.0045
+    );
+
+
+  aroTrasero.position.set(
+    0,
+    0.058,
+    0.054
+  );
+
+
+  grupo.add(
+    aroTrasero
+  );
+
+
+  const aroDelantero =
+    anilloOptico(
+      0.027,
+      0.0045
+    );
+
+
+  aroDelantero.position.set(
+    0,
+    0.058,
+    -0.054
+  );
+
+
+  grupo.add(
+    aroDelantero
+  );
+
+
+  reticulaCruz(
+    grupo,
+    -0.010,
+    0.015,
+    'rojo',
+    0.058
+  );
+
+
+  const torre =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.008,
+        0.008,
+        0.012,
+        14
+      ),
+
+      MAT_METAL_2
+    );
+
+
+  torre.position.set(
+    0,
+    0.090,
+    0.005
+  );
+
+
+  grupo.add(
+    torre
+  );
+
+
+  const tapa =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.009,
+        0.009,
+        0.004,
+        14
+      ),
+
+      MAT_ACERO
+    );
+
+
+  tapa.position.set(
+    0,
+    0.097,
+    0.005
+  );
+
+
+  grupo.add(
+    tapa
+  );
+
+
+  bandaEstriada(
+    grupo,
+    0.040,
+    0.027,
+    14,
+    0.006
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_prismatica'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.058,
+        0.225
+      ),
+  };
+}
+
+
+
+function miraTelescopicaUltra() {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const base =
+    basePicatinny({
+
+      ancho:
+        0.050,
+
+      largo:
+        0.160,
+
+      alto:
+        0.014,
+    });
+
+
+  grupo.add(
+    base
+  );
+
+
+  const puente =
+    cajaBiselada(
+
+      0.032,
+
+      0.025,
+
+      0.125,
+
+      MAT_METAL_2,
+
+      0.004
+    );
+
+
+  puente.position.set(
+    0,
+    0.025,
+    0
+  );
+
+
+  grupo.add(
+    puente
+  );
+
+
+  const tubo =
+    tuboHueco({
+
+      radio:
+        0.022,
+
+      largo:
+        0.205,
+
+      material:
+        MAT_METAL,
+
+      segmentos:
+        28,
+    });
+
+
+  tubo.position.set(
+    0,
+    0.065,
+    -0.008
+  );
+
+
+  grupo.add(
+    tubo
+  );
+
+
+  const campanaTrasera =
+    tuboHueco({
+
+      radio:
+        0.030,
+
+      largo:
+        0.045,
+
+      material:
+        MAT_METAL_2,
+
+      segmentos:
+        28,
+    });
+
+
+  campanaTrasera.position.set(
+    0,
+    0.065,
+    0.112
+  );
+
+
+  grupo.add(
+    campanaTrasera
+  );
+
+
+  const campanaFrontal =
+    tuboHueco({
+
+      radio:
+        0.035,
+
+      largo:
+        0.060,
+
+      material:
+        MAT_METAL_2,
+
+      segmentos:
+        28,
+    });
+
+
+  campanaFrontal.position.set(
+    0,
+    0.065,
+    -0.130
+  );
+
+
+  grupo.add(
+    campanaFrontal
+  );
+
+
+  const aroTrasero =
+    anilloOptico(
+      0.030,
+      0.005
+    );
+
+
+  aroTrasero.position.set(
+    0,
+    0.065,
+    0.136
+  );
+
+
+  grupo.add(
+    aroTrasero
+  );
+
+
+  const aroFrontal =
+    anilloOptico(
+      0.035,
+      0.005
+    );
+
+
+  aroFrontal.position.set(
+    0,
+    0.065,
+    -0.162
+  );
+
+
+  grupo.add(
+    aroFrontal
+  );
+
+
+  reticulaCruz(
+    grupo,
+    -0.020,
+    0.018,
+    'rojo',
+    0.065
+  );
+
+
+  for (
+    const z
+    of [-0.060, 0.060]
+  ) {
+
+    const aroMontura =
+      new THREE.Mesh(
+
+        new THREE.TorusGeometry(
+          0.025,
+          0.0045,
+          8,
+          28
+        ),
+
+        MAT_ACERO
+      );
+
+
+    aroMontura.position.set(
+      0,
+      0.065,
+      z
+    );
+
+
+    grupo.add(
+      aroMontura
+    );
+
+
+    const pata =
+      cajaBiselada(
+
+        0.030,
+
+        0.028,
+
+        0.012,
+
+        MAT_METAL_2,
+
+        0.003
+      );
+
+
+    pata.position.set(
+      0,
+      0.040,
+      z
+    );
+
+
+    grupo.add(
+      pata
+    );
+  }
+
+
+  const torreVertical =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.010,
+        0.010,
+        0.020,
+        16
+      ),
+
+      MAT_METAL_2
+    );
+
+
+  torreVertical.position.set(
+    0,
+    0.099,
+    0
+  );
+
+
+  grupo.add(
+    torreVertical
+  );
+
+
+  const torreLateral =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+        0.009,
+        0.009,
+        0.018,
+        16
+      ),
+
+      MAT_METAL_2
+    );
+
+
+  torreLateral.rotation.z =
+    Math.PI / 2;
+
+
+  torreLateral.position.set(
+    0.030,
+    0.065,
+    0
+  );
+
+
+  grupo.add(
+    torreLateral
+  );
+
+
+  bandaEstriada(
+    grupo,
+    0.105,
+    0.032,
+    22,
+    0.012
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'mira_telescopica'
+      ),
+
+    puntoOcular:
+      new THREE.Vector3(
+        0,
+        0.065,
+        0.315
+      ),
+  };
+}
+
+
+
+function crearMiraUltra(
+
+  clave,
+
+  puntaCañonLocal
+
+) {
+
+  switch (
+    clave
+  ) {
+
+    case 'hierro':
+      return miraHierroUltra(
+        puntaCañonLocal
+      );
+
+
+    case 'reflex':
+      return miraReflexUltra();
+
+
+    case 'holografica':
+      return miraHolograficaUltra();
+
+
+    case 'laser':
+      return miraLaserUltra();
+
+
+    case 'prismatica':
+      return miraPrismaticaUltra();
+
+
+    case 'telescopica':
+      return miraTelescopicaUltra();
+
+
+    case 'ninguna':
+
+    default:
+      return miraNingunaUltra();
+  }
+}
+
+
+
+/* ═══════════════════════════════════
+   BOCAS DE CAÑÓN
+═══════════════════════════════════ */
+
+function radioCanonEstimado(
+
+  canon,
+
+  cuerpo
+
+) {
+
+  let r = {
+
+    ultraligero:
+      0.012,
+
+    corto:
+      0.014,
+
+    estandar:
+      0.0155,
+
+    largo:
+      0.016,
+
+    pesado:
+      0.0195,
+
+  }[canon]
+
+  ??
+
+  0.0155;
+
+
+  if (
+    cuerpo ===
+    'escopeta'
+  ) {
+
+    r +=
+      0.0035;
+  }
+
+
+  if (
+    cuerpo ===
+    'lmg'
+  ) {
+
+    r +=
+      0.0018;
+  }
+
+
+  if (
+    cuerpo ===
+    'francotirador'
+  ) {
+
+    r +=
+      0.001;
+  }
+
+
+  return r;
+}
+
+
+
+function bocaNingunaUltra() {
+
+  return {
+
+    grupo:
+      marcarUltra(
+        new THREE.Group(),
+        'boca_ninguna'
+      ),
+
+    longitudExtra:
+      0,
+  };
+}
+
+
+
+function bocaRompellamasUltra(
+  radioPunta
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const longitudExtra =
+    0.062;
+
+
+  const r =
+    Math.max(
+      0.019,
+      radioPunta +
+      0.002
+    );
+
+
+  const collar =
+    torneado(
+
+      [
+
+        [0.006, r * 0.78],
+
+        [0.006, r],
+
+        [-0.012, r],
+
+        [-0.018, r * 0.92],
+      ],
+
+      MAT_METAL_2,
+
+      {
+        segmentos:
+          20,
+      }
+    );
+
+
+  grupo.add(
+    collar
+  );
+
+
+  const radioProng =
+    r * 0.82;
+
+
+  const prongs =
+    5;
+
+
+  for (
+    let i = 0;
+    i < prongs;
+    i++
+  ) {
+
+    const a =
+
+      (
+        i /
+        prongs
+      )
+
+      *
+
+      Math.PI *
+      2;
+
+
+    const barra =
+      cajaBiselada(
+
+        0.0055,
+
+        0.0055,
+
+        0.050,
+
+        MAT_METAL,
+
+        0.0015
+      );
+
+
+    barra.position.set(
+
+      Math.cos(a) *
+      radioProng,
+
+      Math.sin(a) *
+      radioProng,
+
+      -0.042
+    );
+
+
+    barra.rotation.z =
+      a;
+
+
+    grupo.add(
+      barra
+    );
+  }
+
+
+  const aroFinal =
+    new THREE.Mesh(
+
+      new THREE.TorusGeometry(
+        radioProng,
+        0.0025,
+        6,
+        24
+      ),
+
+      MAT_ACERO
+    );
+
+
+  aroFinal.position.z =
+    -0.066;
+
+
+  grupo.add(
+    aroFinal
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'boca_rompellamas'
+      ),
+
+    longitudExtra,
+  };
+}
+
+
+
+function bocaCompensadorUltra(
+  radioPunta
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const longitudExtra =
+    0.058;
+
+
+  const r =
+    Math.max(
+      0.022,
+      radioPunta +
+      0.003
+    );
+
+
+  const cuerpo =
+    torneado(
+
+      [
+
+        [0.006, r * 0.76],
+
+        [0.006, r],
+
+        [-0.010, r],
+
+        [-0.020, r * 1.04],
+
+        [-0.050, r * 0.98],
+
+        [-0.058, r * 0.80],
+      ],
+
+      MAT_METAL,
+
+      {
+        segmentos:
+          22,
+      }
+    );
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  for (
+    const z
+    of [-0.022, -0.038]
+  ) {
+
+    ranuraOscura(
+
+      grupo,
+
+      {
+
+        x:
+          0,
+
+        y:
+          r * 0.76,
+
+        z,
+
+        ancho:
+          r * 1.25,
+
+        alto:
+          0.006,
+
+        profundo:
+          0.010,
+      }
+    );
+  }
+
+
+  for (
+    const lado
+    of [-1, 1]
+  ) {
+
+    ranuraOscura(
+
+      grupo,
+
+      {
+
+        x:
+          lado * r * 0.77,
+
+        y:
+          0,
+
+        z:
+          -0.038,
+
+        ancho:
+          0.006,
+
+        alto:
+          r * 1.05,
+
+        profundo:
+          0.014,
+      }
+    );
+  }
+
+
+  bandaEstriada(
+
+    grupo,
+
+    -0.010,
+
+    r * 1.01,
+
+    16,
+
+    0.008
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'boca_compensador'
+      ),
+
+    longitudExtra,
+  };
+}
+
+
+
+function bocaSilenciadorUltra(
+
+  radioPunta,
+
+  integral =
+    false
+
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const longitudExtra =
+
+    integral
+      ? 0.225
+      : 0.165;
+
+
+  const r =
+    Math.max(
+
+      integral
+        ? 0.029
+        : 0.025,
+
+      radioPunta
+
+      +
+
+      (
+        integral
+          ? 0.006
+          : 0.004
+      )
+    );
+
+
+  const cuerpo =
+    torneado(
+
+      [
+
+        [0.008, r * 0.70],
+
+        [0.008, r * 0.92],
+
+        [-0.010, r],
+
+        [
+          -longitudExtra * 0.78,
+          r
+        ],
+
+        [
+          -longitudExtra * 0.93,
+          r * 0.94
+        ],
+
+        [
+          -longitudExtra,
+          r * 0.78
+        ],
+      ],
+
+      MAT_METAL,
+
+      {
+        segmentos:
+          28,
+      }
+    );
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const secciones =
+
+    integral
+      ? 6
+      : 4;
+
+
+  for (
+    let i = 1;
+    i <= secciones;
+    i++
+  ) {
+
+    const z =
+
+      -longitudExtra
+
+      *
+
+      (
+        i /
+        (
+          secciones +
+          1
+        )
+      );
+
+
+    const aro =
+      new THREE.Mesh(
+
+        new THREE.TorusGeometry(
+
+          r * 0.96,
+
+          0.0018,
+
+          6,
+
+          26
+        ),
+
+        i === 1
+          ? MAT_ACERO
+          : MAT_METAL_2
+      );
+
+
+    aro.position.z =
+      z;
+
+
+    grupo.add(
+      aro
+    );
+  }
+
+
+  bandaEstriada(
+
+    grupo,
+
+    -0.018,
+
+    r * 1.02,
+
+    integral
+      ? 24
+      : 18,
+
+    integral
+      ? 0.014
+      : 0.010
+  );
+
+
+  const boca =
+    new THREE.Mesh(
+
+      new THREE.TorusGeometry(
+
+        r * 0.67,
+
+        0.0032,
+
+        8,
+
+        26
+      ),
+
+      MAT_INTERIOR
+    );
+
+
+  boca.position.z =
+
+    -longitudExtra
+
+    -
+
+    0.001;
+
+
+  grupo.add(
+    boca
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+
+        grupo,
+
+        integral
+          ? 'boca_supresorIntegral'
+          : 'boca_silenciador'
+      ),
+
+    longitudExtra,
+  };
+}
+
+
+
+function bocaCompensadorPesadoUltra(
+  radioPunta
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const longitudExtra =
+    0.078;
+
+
+  const r =
+    Math.max(
+      0.027,
+      radioPunta +
+      0.005
+    );
+
+
+  const cuerpo =
+    torneado(
+
+      [
+
+        [0.006, r * 0.72],
+
+        [0.006, r * 1.05],
+
+        [-0.012, r * 1.05],
+
+        [-0.020, r],
+
+        [-0.068, r * 0.98],
+
+        [-0.078, r * 0.78],
+      ],
+
+      MAT_METAL_2,
+
+      {
+        segmentos:
+          20,
+      }
+    );
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  for (
+    const z
+    of [-0.025, -0.048]
+  ) {
+
+    for (
+      const lado
+      of [-1, 1]
+    ) {
+
+      ranuraOscura(
+
+        grupo,
+
+        {
+
+          x:
+            lado * r * 0.86,
+
+          y:
+            0,
+
+          z,
+
+          ancho:
+            0.007,
+
+          alto:
+            0.018,
+
+          profundo:
+            0.018,
+        }
+      );
+    }
+
+
+    ranuraOscura(
+
+      grupo,
+
+      {
+
+        x:
+          0,
+
+        y:
+          r * 0.85,
+
+        z,
+
+        ancho:
+          0.018,
+
+        alto:
+          0.007,
+
+        profundo:
+          0.016,
+      }
+    );
+  }
+
+
+  for (
+    const z
+    of [-0.016, -0.063]
+  ) {
+
+    const aro =
+      new THREE.Mesh(
+
+        new THREE.TorusGeometry(
+          r,
+          0.0024,
+          6,
+          24
+        ),
+
+        MAT_ACERO
+      );
+
+
+    aro.position.z =
+      z;
+
+
+    grupo.add(
+      aro
+    );
+  }
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'boca_compensadorPesado'
+      ),
+
+    longitudExtra,
+  };
+}
+
+
+
+function bocaFrenoRanuradoUltra(
+  radioPunta
+) {
+
+  const grupo =
+    new THREE.Group();
+
+
+  const longitudExtra =
+    0.070;
+
+
+  const r =
+    Math.max(
+      0.023,
+      radioPunta +
+      0.0035
+    );
+
+
+  const cuerpo =
+    cajaBiselada(
+
+      r * 2.15,
+
+      r * 1.72,
+
+      longitudExtra,
+
+      MAT_METAL,
+
+      0.005
+    );
+
+
+  cuerpo.position.z =
+    -longitudExtra / 2;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const collar =
+    torneado(
+
+      [
+
+        [0.006, r * 0.74],
+
+        [0.006, r * 0.96],
+
+        [-0.012, r * 0.96],
+      ],
+
+      MAT_METAL_2,
+
+      {
+        segmentos:
+          20,
+      }
+    );
+
+
+  grupo.add(
+    collar
+  );
+
+
+  for (
+    const lado
+    of [-1, 1]
+  ) {
+
+    for (
+      const z
+      of [-0.020, -0.047]
+    ) {
+
+      ranuraOscura(
+
+        grupo,
+
+        {
+
+          x:
+            lado * r * 1.05,
+
+          y:
+            0,
+
+          z,
+
+          ancho:
+            0.008,
+
+          alto:
+            r * 1.05,
+
+          profundo:
+            0.019,
+        }
+      );
+    }
+  }
+
+
+  const salida =
+    new THREE.Mesh(
+
+      new THREE.TorusGeometry(
+
+        r * 0.58,
+
+        0.003,
+
+        8,
+
+        22
+      ),
+
+      MAT_INTERIOR
+    );
+
+
+  salida.position.z =
+
+    -longitudExtra
+
+    -
+
+    0.001;
+
+
+  grupo.add(
+    salida
+  );
+
+
+  return {
+
+    grupo:
+      marcarUltra(
+        grupo,
+        'boca_frenoRanurado'
+      ),
+
+    longitudExtra,
+  };
+}
+
+
+
+function crearBocaUltra(
+
+  clave,
+
+  radioPunta
+
+) {
+
+  switch (
+    clave
+  ) {
+
+    case 'rompellamas':
+
+      return bocaRompellamasUltra(
+        radioPunta
+      );
+
+
+    case 'compensador':
+
+      return bocaCompensadorUltra(
+        radioPunta
+      );
+
+
+    case 'silenciador':
+
+      return bocaSilenciadorUltra(
+        radioPunta,
+        false
+      );
+
+
+    case 'compensadorPesado':
+
+      return bocaCompensadorPesadoUltra(
+        radioPunta
+      );
+
+
+    case 'frenoRanurado':
+
+      return bocaFrenoRanuradoUltra(
+        radioPunta
+      );
+
+
+    case 'supresorIntegral':
+
+      return bocaSilenciadorUltra(
+        radioPunta,
+        true
+      );
+
+
+    case 'ninguna':
+
+    default:
+
+      return bocaNingunaUltra();
+  }
+}
+
+
+
+/* ═══════════════════════════════════
+   EMPUÑADURAS
+═══════════════════════════════════ */
+
+function baseGrip(
+
+  ancho =
+    0.032,
+
+  profundo =
+    0.042
+
+) {
+
+  const base =
+    new THREE.Group();
+
+
+  const clamp =
+    cajaBiselada(
+
+      ancho,
+
+      0.014,
+
+      profundo,
+
+      MAT_METAL_2,
+
+      0.003
+    );
+
+
+  clamp.position.y =
+    -0.006;
+
+
+  base.add(
+    clamp
+  );
+
+
+  const torn =
+    new THREE.Mesh(
+
+      new THREE.CylinderGeometry(
+
+        0.0035,
+
+        0.0035,
+
+        ancho +
+        0.006,
+
+        10
+      ),
+
+      MAT_ACERO
+    );
+
+
+  torn.rotation.z =
+    Math.PI / 2;
+
+
+  torn.position.set(
+    0,
+    -0.006,
+    0.008
+  );
+
+
+  base.add(
+    torn
+  );
+
+
+  return base;
+}
+
+
+
+function empunaduraVerticalUltra() {
+
+  const grupo =
+    baseGrip(
+      0.036,
+      0.044
+    );
+
+
+  const perfil = [
+
+    [-0.018, 0.008],
+
+    [0.018, 0.008],
+
+    [0.016, -0.032],
+
+    [0.012, -0.072],
+
+    [-0.010, -0.076],
+
+    [-0.016, -0.050],
+  ];
+
+
+  const cuerpo =
+    perfilExtruido(
+
+      perfil,
+
+      0.034,
+
+      MAT_POLIMERO,
+
+      {
+        bisel:
+          0.004,
+
+        curvaBisel:
+          3,
+      }
+    );
+
+
+  cuerpo.position.y =
+    -0.010;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  texturaAgarre(
+
+    grupo,
+
+    {
+
+      x:
+        0.018,
+
+      y:
+        -0.046,
+
+      z:
+        0,
+
+      ancho:
+        0.028,
+
+      alto:
+        0.044,
+
+      filas:
+        6,
+
+      columnas:
+        3,
+
+      material:
+        MAT_GOMA,
+    }
+  );
+
+
+  const tapa =
+    cajaBiselada(
+
+      0.036,
+
+      0.009,
+
+      0.035,
+
+      MAT_GOMA,
+
+      0.003
+    );
+
+
+  tapa.position.y =
+    -0.086;
+
+
+  grupo.add(
+    tapa
+  );
+
+
+  return marcarUltra(
+    grupo,
+    'empunadura_vertical'
+  );
+}
+
+
+
+function empunaduraAnguladaUltra() {
+
+  const grupo =
+    baseGrip(
+      0.037,
+      0.060
+    );
+
+
+  const perfil = [
+
+    [-0.030, 0.005],
+
+    [0.028, 0.005],
+
+    [0.020, -0.020],
+
+    [-0.002, -0.048],
+
+    [-0.030, -0.041],
+
+    [-0.036, -0.020],
+  ];
+
+
+  const cuerpo =
+    perfilExtruido(
+
+      perfil,
+
+      0.036,
+
+      MAT_POLIMERO,
+
+      {
+        bisel:
+          0.004,
+
+        curvaBisel:
+          3,
+      }
+    );
+
+
+  cuerpo.position.y =
+    -0.012;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  for (
+    let i = 0;
+    i < 4;
+    i++
+  ) {
+
+    const nervio =
+      cajaBiselada(
+
+        0.038,
+
+        0.004,
+
+        0.008,
+
+        MAT_GOMA,
+
+        0.001
+      );
+
+
+    nervio.position.set(
+
+      0,
+
+      -0.023 -
+      i * 0.007,
+
+      -0.008 +
+      i * 0.008
+    );
+
+
+    nervio.rotation.x =
+      0.38;
+
+
+    grupo.add(
+      nervio
+    );
+  }
+
+
+  return marcarUltra(
+    grupo,
+    'empunadura_angulada'
+  );
+}
+
+
+
+function empunaduraTopeUltra() {
+
+  const grupo =
+    baseGrip(
+      0.035,
+      0.034
+    );
+
+
+  const perfil = [
+
+    [-0.017, 0.004],
+
+    [0.017, 0.004],
+
+    [0.015, -0.016],
+
+    [0.005, -0.032],
+
+    [-0.014, -0.030],
+
+    [-0.020, -0.014],
+  ];
+
+
+  const cuerpo =
+    perfilExtruido(
+
+      perfil,
+
+      0.034,
+
+      MAT_POLIMERO,
+
+      {
+        bisel:
+          0.004,
+
+        curvaBisel:
+          3,
+      }
+    );
+
+
+  cuerpo.position.y =
+    -0.010;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const frente =
+    cajaBiselada(
+
+      0.036,
+
+      0.020,
+
+      0.008,
+
+      MAT_GOMA,
+
+      0.002
+    );
+
+
+  frente.position.set(
+    0,
+    -0.023,
+    -0.020
+  );
+
+
+  grupo.add(
+    frente
+  );
+
+
+  return marcarUltra(
+    grupo,
+    'empunadura_topeMano'
+  );
+}
+
+
+
+function empunaduraCortaUltra() {
+
+  const grupo =
+    baseGrip(
+      0.034,
+      0.032
+    );
+
+
+  const cuerpo =
+    cajaBiselada(
+
+      0.032,
+
+      0.026,
+
+      0.030,
+
+      MAT_POLIMERO,
+
+      0.006
+    );
+
+
+  cuerpo.position.y =
+    -0.022;
+
+
+  cuerpo.rotation.x =
+    0.12;
+
+
+  grupo.add(
+    cuerpo
+  );
+
+
+  const goma =
+    cajaBiselada(
+
+      0.034,
+
+      0.007,
+
+      0.028,
+
+      MAT_GOMA,
+
+      0.002
+    );
+
+
+  goma.position.y =
+    -0.036;
+
+
+  grupo.add(
+    goma
+  );
+
+
+  return marcarUltra(
+    grupo,
+    'empunadura_cortaCombate'
+  );
+}
+
+
+
+function empunaduraBipodeUltra() {
+
+  const grupo =
+    baseGrip(
+      0.044,
+      0.052
+    );
+
+
+  const bloque =
+    cajaBiselada(
+
+      0.040,
+
+      0.023,
+
+      0.044,
+
+      MAT_METAL,
+
+      0.004
+    );
+
+
+  bloque.position.y =
+    -0.020;
+
+
+  grupo.add(
+    bloque
+  );
+
+
+  for (
+    const lado
+    of [-1, 1]
+  ) {
+
+    const bisagra =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          0.007,
+          0.007,
+          0.010,
+          14
+        ),
+
+        MAT_ACERO
+      );
+
+
+    bisagra.rotation.z =
+      Math.PI / 2;
+
+
+    bisagra.position.set(
+
+      lado * 0.021,
+
+      -0.032,
+
+      0.008
+    );
+
+
+    grupo.add(
+      bisagra
+    );
+
+
+    const pata =
+      new THREE.Mesh(
+
+        new THREE.CylinderGeometry(
+          0.0042,
+          0.0050,
+          0.095,
+          8
+        ),
+
+        MAT_METAL_2
+      );
+
+
+    pata.position.set(
+
+      lado * 0.040,
+
+      -0.079,
+
+      0.012
+    );
+
+
+    pata.rotation.z =
+      lado *
+      0.38;
+
+
+    grupo.add(
+      pata
+    );
+
+
+    const pie =
+      cajaBiselada(
+
+        0.018,
+
+        0.008,
+
+        0.024,
+
+        MAT_GOMA,
+
+        0.003
+      );
+
+
+    pie.position.set(
+
+      lado * 0.057,
+
+      -0.126,
+
+      0.012
+    );
+
+
+    grupo.add(
+      pie
+    );
+  }
+
+
+  return marcarUltra(
+    grupo,
+    'empunadura_bipode'
+  );
+}
+
+
+
+function crearEmpunaduraUltra(
+  clave
+) {
+
+  switch (
+    clave
+  ) {
+
+    case 'vertical':
+
+      return empunaduraVerticalUltra();
+
+
+    case 'angulada':
+
+      return empunaduraAnguladaUltra();
+
+
+    case 'bipode':
+
+      return empunaduraBipodeUltra();
+
+
+    case 'topeMano':
+
+      return empunaduraTopeUltra();
+
+
+    case 'cortaCombate':
+
+      return empunaduraCortaUltra();
+
+
+    case 'ninguna':
+
+    default:
+
+      return marcarUltra(
+        new THREE.Group(),
+        'empunadura_ninguna'
+      );
+  }
+}
+
+
+
+/* ═══════════════════════════════════
+   WRAPPER DEL MODELO BASE
+═══════════════════════════════════ */
+
+function reemplazarAccesorios(
+
+  modelo,
+
+  seleccion
+
+) {
+
+  const grupo =
+    modelo.grupo;
+
+
+  /*
+    MODELO BASE:
+
+    0 cuerpo
+    1 cañón
+    2 cargador
+    3 mira
+    4 empuñadura
+    5 boca
+  */
+
+  const hijos =
+    grupo.children
+      .slice(
+        0,
+        6
+      );
+
+
+  if (
+    hijos.length <
+    6
+  ) {
+
+    console.warn(
+      '[DEAL] estructura inesperada en modeloArmaBase'
+    );
+
+    return modelo;
+  }
+
+
+  const cargadorViejo =
+    hijos[2];
+
+
+  const miraVieja =
+    hijos[3];
+
+
+  const empunaduraVieja =
+    hijos[4];
+
+
+  const bocaVieja =
+    hijos[5];
+
+
+  const puntoCargador =
+    cargadorViejo
+      .position
+      .clone();
+
+
+  const puntoMira =
+    miraVieja
+      .position
+      .clone();
+
+
+  const puntoEmpunadura =
+    empunaduraVieja
+      .position
+      .clone();
+
+
+  const puntaCanonBase =
+    bocaVieja
+      .position
+      .clone();
+
+
+  for (
+    const viejo
+    of [
+
+      cargadorViejo,
+
+      miraVieja,
+
+      empunaduraVieja,
+
+      bocaVieja,
+    ]
+  ) {
+
+    grupo.remove(
+      viejo
+    );
+
+
+    limpiarGeometrias(
+      viejo
+    );
+  }
+
+
+  /* CARGADOR */
+
+  const cargador =
+    crearCargadorUltra(
+
+      seleccion.cargador
+
+      ??
+
+      'medio'
+    );
+
+
+  cargador.position.copy(
+    puntoCargador
+  );
+
+
+  grupo.add(
+    cargador
+  );
+
+
+  /* MIRA */
+
+  const puntaLocalMira =
+
+    puntaCanonBase
+      .clone()
+      .sub(
+        puntoMira
+      );
+
+
+  const partesMira =
+    crearMiraUltra(
+
+      seleccion.mira
+
+      ??
+
+      'ninguna',
+
+      puntaLocalMira
+    );
+
+
+  partesMira
+    .grupo
+    .position
+    .copy(
+      puntoMira
+    );
+
+
+  grupo.add(
+    partesMira.grupo
+  );
+
+
+  /* EMPUÑADURA */
+
+  const emp =
+    crearEmpunaduraUltra(
+
+      seleccion.empuñadura
+
+      ??
+
+      'ninguna'
+    );
+
+
+  emp.position.copy(
+    puntoEmpunadura
+  );
+
+
+  grupo.add(
+    emp
+  );
+
+
+  /* BOCA */
+
+  const radioPunta =
+    radioCanonEstimado(
+
+      seleccion.cañon,
+
+      seleccion.cuerpo
+    );
+
+
+  const partesBoca =
+    crearBocaUltra(
+
+      seleccion.boca
+
+      ??
+
+      'ninguna',
+
+      radioPunta
+    );
+
+
+  partesBoca
+    .grupo
+    .position
+    .copy(
+      puntaCanonBase
+    );
+
+
+  grupo.add(
+    partesBoca.grupo
+  );
+
+
+  /* PUNTA REAL */
+
+  const puntaCañon =
+    puntaCanonBase.clone();
+
+
+  puntaCañon.z -=
+    partesBoca.longitudExtra;
+
+
+  /* PUNTO OCULAR */
+
+  const puntoOcular =
+
+    puntoMira
+      .clone()
+      .add(
+        partesMira.puntoOcular
+      );
+
+
+  /*
+    Recalcular posición ADS.
+
+    Near = 0.035.
+
+    Reservamos margen para recoil.
+  */
+
+  const LIMITE_Z =
+    -0.090;
+
+
+  let zMasAtras =
+    -Infinity;
+
+
+  grupo.updateMatrixWorld(
+    true
+  );
+
+
+  grupo.traverse(
+    o => {
+
+      if (
+        !o.isMesh ||
+        o.userData.esCulata
+      ) {
+        return;
+      }
+
+
+      const caja =
+        new THREE.Box3()
+          .setFromObject(
+            o
+          );
+
+
+      if (
+        caja.max.z >
+        zMasAtras
+      ) {
+
+        zMasAtras =
+          caja.max.z;
+      }
+    }
+  );
+
+
+  if (
+    zMasAtras ===
+    -Infinity
+  ) {
+
+    zMasAtras =
+      0;
+  }
+
+
+  const posApuntando =
+    puntoOcular
+      .clone()
+      .negate();
+
+
+  const zFinal =
+
+    zMasAtras
+
+    +
+
+    posApuntando.z;
+
+
+  if (
+    zFinal >
+    LIMITE_Z
+  ) {
+
+    posApuntando.z -=
+
+      zFinal
+
+      -
+
+      LIMITE_Z;
+  }
+
+
+  modelo.puntaCañon =
+    puntaCañon;
+
+
+  modelo.puntoOcular =
+    puntoOcular;
+
+
+  modelo.posApuntando =
+    posApuntando;
+
+
+  preparar(
+    grupo
+  );
+
+
+  return modelo;
+}
+
+
+
+export function construirModeloArma(
+  seleccion
+) {
+
+  const modelo =
+    construirModeloBase(
+      seleccion
+    );
+
+
+  return reemplazarAccesorios(
+
+    modelo,
+
+    seleccion
+  );
+}
+
+
+
+export function liberarModeloArma(
+  modelo
+) {
+
+  if (
+    !modelo?.grupo
+  ) {
+    return;
+  }
+
+
+  const ultras =
+    modelo
+      .grupo
+      .children
+      .filter(
+
+        h =>
+          h.userData
+            ?.accesorioUltra
+      );
+
+
+  for (
+    const ultra
+    of ultras
+  ) {
+
+    modelo
+      .grupo
+      .remove(
+        ultra
+      );
+
+
+    limpiarGeometrias(
+      ultra
+    );
+  }
+
+
+  liberarModeloBase(
+    modelo
+  );
 }

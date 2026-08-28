@@ -1,80 +1,65 @@
 import * as THREE from 'three';
 
+/* ── core/mundo.js ───────────────────────────────────────────
+   DEAL — GRAPHICS PASS V4.1
+
+   Objetivos:
+   - near plane más pequeño para viewmodel/cuerpo cercano;
+   - sRGB + ACES Filmic;
+   - luz ambiental que no aplaste el contraste;
+   - sombras direccionales de alta resolución alrededor del jugador;
+   - arma y cuerpo legibles tanto en interior como exterior.
+──────────────────────────────────────────────────────────── */
 
 export function crearMundo() {
+  const scene = new THREE.Scene();
 
-  const scene =
-    new THREE.Scene();
-
-
-  const COLOR_AMBIENTE =
-    0x8e98a3;
-
+  const COLOR_CIELO = 0x9099a3;
 
   scene.background =
     new THREE.Color(
-      COLOR_AMBIENTE
+      COLOR_CIELO
     );
-
-
-  /*
-    Niebla exponencial.
-
-    Mucho menos agresiva
-    que la niebla anterior.
-  */
 
   scene.fog =
     new THREE.FogExp2(
-
-      COLOR_AMBIENTE,
-
-      0.0055
+      COLOR_CIELO,
+      0.0048
     );
 
 
-  /* ─────────────────────
-     CÁMARA
-  ───────────────────── */
+  /* ── CÁMARA ───────────────────────── */
+
+  const ALTURA_OJOS =
+    1.70;
 
   const camera =
     new THREE.PerspectiveCamera(
-
       75,
 
       window.innerWidth /
       window.innerHeight,
 
-      0.05,
+      0.035,
 
       6000
     );
 
-
-  const ALTURA_OJOS =
-    1.7;
-
-
   camera.position.set(
-
     0,
-
     ALTURA_OJOS,
-
     10
   );
 
+  scene.add(
+    camera
+  );
 
-  scene.add(camera);
 
-
-  /* ─────────────────────
-     RENDERER
-  ───────────────────── */
+  /* ── RENDERER ─────────────────────── */
 
   const renderer =
     new THREE.WebGLRenderer({
-
       antialias:
         true,
 
@@ -84,62 +69,30 @@ export function crearMundo() {
 
 
   renderer.setSize(
-
     window.innerWidth,
-
     window.innerHeight
   );
 
 
-  /*
-    1.75 mantiene buena
-    calidad sin matar GPU
-    en monitores 4K/retina.
-  */
-
   renderer.setPixelRatio(
-
     Math.min(
-
       window.devicePixelRatio,
-
-      1.75
+      1.65
     )
   );
 
 
-  /*
-    COLOR MANAGEMENT
-  */
-
   renderer.outputColorSpace =
     THREE.SRGBColorSpace;
 
-
-  /*
-    Tone Mapping.
-
-    Hace especialmente
-    diferencia en:
-
-    - metal
-    - fogonazos
-    - cielo
-    - interiores
-    - casquillos
-  */
 
   renderer.toneMapping =
     THREE.ACESFilmicToneMapping;
 
 
   renderer.toneMappingExposure =
-    1.16;
+    1.20;
 
-
-  /* ─────────────────────
-     SOMBRAS
-  ───────────────────── */
 
   renderer.shadowMap.enabled =
     true;
@@ -149,74 +102,46 @@ export function crearMundo() {
     THREE.PCFSoftShadowMap;
 
 
+  renderer.shadowMap.autoUpdate =
+    true;
+
+
   document.body.prepend(
     renderer.domElement
   );
 
 
-  /* ─────────────────────
-     ILUMINACIÓN AMBIENTE
-  ───────────────────── */
-
-  /*
-    Antes AmbientLight era
-    muy fuerte y aplastaba
-    el contraste.
-
-    Ahora la bajamos.
-  */
+  /* ── ILUMINACIÓN GLOBAL ───────────── */
 
   const ambiente =
     new THREE.AmbientLight(
-
-      0x9ca6b1,
-
-      0.42
+      0x9ca6b3,
+      0.34
     );
-
 
   scene.add(
     ambiente
   );
 
 
-  /*
-    HemisphereLight.
-
-    Cielo frío arriba,
-    suelo cálido abajo.
-
-    Esto ayuda muchísimo
-    a que el arma no se vea
-    completamente negra.
-  */
-
   const hemisferica =
     new THREE.HemisphereLight(
-
-      0xc8d8e8,
-
-      0x4b4439,
-
-      1.05
+      0xd5e2ef,
+      0x494236,
+      1.12
     );
-
 
   scene.add(
     hemisferica
   );
 
 
-  /* ─────────────────────
-     SOL
-  ───────────────────── */
+  /* ── SOL ──────────────────────────── */
 
   const sol =
     new THREE.DirectionalLight(
-
-      0xe5edf6,
-
-      2.15
+      0xeaf1f8,
+      2.35
     );
 
 
@@ -224,100 +149,69 @@ export function crearMundo() {
     true;
 
 
-  /*
-    2048 puede parecer menor
-    que 4096, pero el frustum
-    ahora es MUCHÍSIMO menor.
+  sol.shadow.mapSize.set(
+    4096,
+    4096
+  );
 
-    Resultado:
-    más píxeles de sombra
-    por metro.
-  */
-
-  sol.shadow
-    .mapSize
-    .set(
-
-      2048,
-
-      2048
-    );
-
-
-  /*
-    La cámara de sombras
-    cubre solo 36m.
-
-    Antes cubría alrededor
-    de 80m constantemente.
-  */
 
   sol.shadow.camera.left =
-    -18;
-
+    -16;
 
   sol.shadow.camera.right =
-    18;
-
+    16;
 
   sol.shadow.camera.top =
-    18;
-
+    16;
 
   sol.shadow.camera.bottom =
-    -18;
+    -16;
 
 
   sol.shadow.camera.near =
-    1;
-
+    0.5;
 
   sol.shadow.camera.far =
-    95;
+    90;
 
-
-  /*
-    Reduce acne
-    y shadow peter-panning.
-  */
 
   sol.shadow.bias =
-    -0.00022;
+    -0.00018;
 
 
   sol.shadow.normalBias =
-    0.025;
+    0.018;
 
 
-  scene.add(sol);
+  sol.shadow.radius =
+    2;
 
+
+  scene.add(
+    sol
+  );
 
   scene.add(
     sol.target
   );
 
 
-  /* ─────────────────────
-     PISO EXTERIOR
-  ───────────────────── */
+  /* ── PISO ─────────────────────────── */
 
   const suelo =
     new THREE.Mesh(
 
       new THREE.PlaneGeometry(
-
         70,
-
         90
       ),
 
       new THREE.MeshStandardMaterial({
-
         color:
-          0x5a574e,
+          0x5b584f,
 
         roughness:
-          0.94,
+          0.93,
 
         metalness:
           0.0,
@@ -330,11 +224,8 @@ export function crearMundo() {
 
 
   suelo.position.set(
-
     0,
-
     0,
-
     20
   );
 
@@ -348,17 +239,12 @@ export function crearMundo() {
   );
 
 
-  /* ─────────────────────
-     SOMBRA DINÁMICA
-  ───────────────────── */
+  /* ── SOMBRAS DINÁMICAS ───────────── */
 
   const direccionSolActual =
     new THREE.Vector3(
-
       0.4,
-
       0.7,
-
       0.25
     )
     .normalize();
@@ -368,6 +254,10 @@ export function crearMundo() {
     direccion
   ) {
 
+    if (!direccion) {
+      return;
+    }
+
     direccionSolActual
       .copy(
         direccion
@@ -376,30 +266,20 @@ export function crearMundo() {
   }
 
 
-  /*
-    El sol sigue al jugador.
-
-    NO cambia su ángulo.
-
-    Solo mueve la cámara
-    de sombras alrededor
-    de donde estás.
-  */
-
   function actualizarIluminacion(
     posicionJugador
   ) {
 
-    sol.target
-      .position
-      .set(
+    if (!posicionJugador) {
+      return;
+    }
 
-        posicionJugador.x,
 
-        0.8,
-
-        posicionJugador.z
-      );
+    sol.target.position.set(
+      posicionJugador.x,
+      0.9,
+      posicionJugador.z
+    );
 
 
     sol.position
@@ -407,9 +287,7 @@ export function crearMundo() {
         sol.target.position
       )
       .addScaledVector(
-
         direccionSolActual,
-
         42
       );
 
@@ -419,9 +297,7 @@ export function crearMundo() {
   }
 
 
-  /* ─────────────────────
-     RESIZE
-  ───────────────────── */
+  /* ── RESIZE ───────────────────────── */
 
   window.addEventListener(
     'resize',
@@ -429,9 +305,7 @@ export function crearMundo() {
     () => {
 
       camera.aspect =
-
-        window.innerWidth
-        /
+        window.innerWidth /
         window.innerHeight;
 
 
@@ -440,20 +314,15 @@ export function crearMundo() {
 
 
       renderer.setSize(
-
         window.innerWidth,
-
         window.innerHeight
       );
 
 
       renderer.setPixelRatio(
-
         Math.min(
-
           window.devicePixelRatio,
-
-          1.75
+          1.65
         )
       );
     }
@@ -461,11 +330,8 @@ export function crearMundo() {
 
 
   return {
-
     scene,
-
     camera,
-
     renderer,
 
     sol,
@@ -483,11 +349,7 @@ export function crearMundo() {
 }
 
 
-/*
-  Compatibilidad con
-  código anterior.
-*/
-
+/* Compatibilidad */
 const _colorImpacto =
   new THREE.Color(
     0xff3b3b
@@ -499,8 +361,7 @@ export function marcarImpacto(
 ) {
 
   if (
-    !mesh.material ||
-    !mesh.material.color ||
+    !mesh?.material?.color ||
     mesh.userData.flasheando
   ) {
     return;
@@ -511,7 +372,7 @@ export function marcarImpacto(
     true;
 
 
-  const colorOriginal =
+  const original =
     mesh.material
       .color
       .clone();
@@ -534,7 +395,7 @@ export function marcarImpacto(
         mesh.material
           .color
           .copy(
-            colorOriginal
+            original
           );
       }
 
